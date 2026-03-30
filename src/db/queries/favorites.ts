@@ -53,6 +53,11 @@ export function removeFavorite(userId: number, listingId: number): boolean {
   return result.changes > 0
 }
 
+export function clearAllFavorites(userId: number): void {
+  const db = getDatabase()
+  db.prepare('DELETE FROM favorites WHERE user_id = ?').run(userId)
+}
+
 export function getUserFavorites(userId: number): FavoriteWithListing[] {
   const db = getDatabase()
   return db

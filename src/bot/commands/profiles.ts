@@ -7,7 +7,9 @@ import {
   updateProfile,
   getProfileById,
 } from '../../db/queries/search-profiles'
+import { startSearchWithProfiles } from './search'
 import { messages } from '../messages'
+import { escapeHtml } from '../../utils'
 
 interface ProfileState {
   action:
@@ -29,37 +31,12 @@ function buildProfileListKeyboard(
 ): ReturnType<typeof Markup.inlineKeyboard> {
   const profiles = getUserProfiles(userId)
   const buttons = profiles.map((p) => [
-    Markup.button.callback(p.name, `prof_view_${p.id}`),
-    Markup.button.callback(messages.profilesDelete, `prof_del_${p.id}`),
+    Markup.button.callback(`📌 ${p.name}`, `prof_view_${p.id}`),
   ])
 
   buttons.push([Markup.button.callback(messages.profilesAdd, 'prof_add')])
 
   return Markup.inlineKeyboard(buttons)
-}
-
-function formatProfile(p: {
-  name: string
-  keywords: string
-  min_price: number | null
-  max_price: number | null
-  min_size: number | null
-  max_size: number | null
-  min_plot_size: number | null
-}): string {
-  const filters: string[] = []
-  if (p.min_price || p.max_price) {
-    filters.push(`€${p.min_price ?? '...'}-${p.max_price ?? '...'}`)
-  }
-  if (p.min_size || p.max_size) {
-    filters.push(`${p.min_size ?? '...'}−${p.max_size ?? '...'}м²`)
-  }
-  if (p.min_plot_size) {
-    filters.push(`от ${p.min_plot_size} ар`)
-  }
-  const filtersStr =
-    filters.length > 0 ? `\nФильтры: ${filters.join(', ')}` : ''
-  return `📌 *${p.name}*\nКлючевые слова: ${p.keywords}${filtersStr}`
 }
 
 function parseFilters(text: string): {
@@ -92,6 +69,12 @@ function parseFilters(text: string): {
   return result
 }
 
+function cancelKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback(messages.profilesCancel, 'prof_cancel')],
+  ])
+}
+
 export function registerProfilesCommand(bot: Telegraf): void {
   bot.command('profiles', async (ctx) => {
     const user = findOrCreateUser(ctx.from.id, ctx.from.username)
@@ -115,10 +98,14 @@ export function registerProfilesCommand(bot: Telegraf): void {
       return
     }
 
-    await ctx.editMessageText(formatProfile(profile), {
-      parse_mode: 'Markdown',
+    await ctx.editMessageText(messages.formatProfile(profile), {
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard([
         [
+          Markup.button.callback(
+            messages.profilesRun,
+            `prof_run_${profile.id}`
+          ),
           Markup.button.callback(
             messages.profilesEdit,
             `prof_edit_${profile.id}`
@@ -145,8 +132,34 @@ export function registerProfilesCommand(bot: Telegraf): void {
     await ctx.answerCbQuery()
   })
 
-  // Delete profile
+  // Delete profile — show confirmation
   bot.action(/^prof_del_(\d+)$/, async (ctx) => {
+    const user = findOrCreateUser(ctx.from.id, ctx.from.username)
+    const profileId = parseInt(ctx.match[1], 10)
+    const profile = getProfileById(profileId, user.id)
+
+    if (!profile) {
+      await ctx.answerCbQuery(messages.profilesNotFound)
+      return
+    }
+
+    await ctx.editMessageText(messages.profilesConfirmDelete(profile.name), {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback(
+            messages.profilesConfirmDeleteYes,
+            `prof_delok_${profileId}`
+          ),
+          Markup.button.callback(messages.buttonCancel, 'prof_list'),
+        ],
+      ]),
+    })
+    await ctx.answerCbQuery()
+  })
+
+  // Confirm delete
+  bot.action(/^prof_delok_(\d+)$/, async (ctx) => {
     const user = findOrCreateUser(ctx.from.id, ctx.from.username)
     const profileId = parseInt(ctx.match[1], 10)
     deleteProfile(profileId, user.id)
@@ -158,10 +171,34 @@ export function registerProfilesCommand(bot: Telegraf): void {
     await ctx.answerCbQuery()
   })
 
+  // Run search from profile
+  bot.action(/^prof_run_(\d+)$/, async (ctx) => {
+    const user = findOrCreateUser(ctx.from.id, ctx.from.username)
+    const profileId = parseInt(ctx.match[1], 10)
+    const profiles = getUserProfiles(user.id)
+
+    startSearchWithProfiles(ctx.from.id, profiles, [profileId])
+
+    await ctx.editMessageText(messages.searchEnterArea)
+    await ctx.answerCbQuery()
+  })
+
   // Start adding profile
   bot.action('prof_add', async (ctx) => {
     userStates.set(ctx.from.id, { action: 'add_name' })
-    await ctx.editMessageText(messages.profilesEnterName)
+    await ctx.editMessageText(messages.profilesEnterName, cancelKeyboard())
+    await ctx.answerCbQuery()
+  })
+
+  // Cancel wizard
+  bot.action('prof_cancel', async (ctx) => {
+    userStates.delete(ctx.from.id)
+    const user = findOrCreateUser(ctx.from.id, ctx.from.username)
+
+    await ctx.editMessageText(
+      messages.profilesCancelled,
+      buildProfileListKeyboard(user.id)
+    )
     await ctx.answerCbQuery()
   })
 
@@ -199,7 +236,7 @@ export function registerProfilesCommand(bot: Telegraf): void {
       action: 'edit_name',
       profileId: parseInt(ctx.match[1], 10),
     })
-    await ctx.editMessageText(messages.profilesEnterName)
+    await ctx.editMessageText(messages.profilesEnterName, cancelKeyboard())
     await ctx.answerCbQuery()
   })
 
@@ -212,7 +249,8 @@ export function registerProfilesCommand(bot: Telegraf): void {
       profileId,
     })
     await ctx.editMessageText(
-      `Текущие ключевые слова: "${profile?.keywords ?? ''}"\nВведите новые:`
+      `Текущие ключевые слова: "${escapeHtml(profile?.keywords ?? '')}"\nВведите новые:`,
+      cancelKeyboard()
     )
     await ctx.answerCbQuery()
   })
@@ -222,7 +260,7 @@ export function registerProfilesCommand(bot: Telegraf): void {
       action: 'edit_filters',
       profileId: parseInt(ctx.match[1], 10),
     })
-    await ctx.editMessageText(messages.profilesEnterFilters)
+    await ctx.editMessageText(messages.profilesEnterFilters, cancelKeyboard())
     await ctx.answerCbQuery()
   })
 
@@ -238,13 +276,13 @@ export function registerProfilesCommand(bot: Telegraf): void {
       case 'add_name':
         state.name = text
         state.action = 'add_keywords'
-        await ctx.reply(messages.profilesEnterKeywords(text))
+        await ctx.reply(messages.profilesEnterKeywords(text), cancelKeyboard())
         break
 
       case 'add_keywords':
         state.keywords = text === '-' ? state.name! : text
         state.action = 'add_filters'
-        await ctx.reply(messages.profilesEnterFilters)
+        await ctx.reply(messages.profilesEnterFilters, cancelKeyboard())
         break
 
       case 'add_filters': {

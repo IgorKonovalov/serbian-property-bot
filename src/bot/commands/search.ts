@@ -7,15 +7,20 @@ import {
 } from '../../db/queries/search-profiles'
 import { upsertListing } from '../../db/queries/listings'
 import { addFavorite } from '../../db/queries/favorites'
-import { getDatabase } from '../../db/database'
 import type { ParserRegistry } from '../../parsers/registry'
 import type { Listing, SearchParams } from '../../parsers/types'
 import { messages } from '../messages'
 
+interface SearchResult extends Listing {
+  dbId: number
+}
+
 interface SearchState {
+  phase: 'selecting' | 'entering_area' | 'browsing'
   selectedProfileIds: Set<number>
   profiles: DbSearchProfile[]
-  results?: Listing[]
+  results?: SearchResult[]
+  savedIds: Set<number>
   page: number
 }
 
@@ -23,12 +28,28 @@ const RESULTS_PER_PAGE = 5
 
 const userStates = new Map<number, SearchState>()
 
+export function startSearchWithProfiles(
+  telegramId: number,
+  profiles: DbSearchProfile[],
+  selectedIds: number[]
+): SearchState {
+  const state: SearchState = {
+    phase: 'entering_area',
+    selectedProfileIds: new Set(selectedIds),
+    profiles,
+    savedIds: new Set(),
+    page: 0,
+  }
+  userStates.set(telegramId, state)
+  return state
+}
+
 function buildProfileKeyboard(
   state: SearchState
 ): ReturnType<typeof Markup.inlineKeyboard> {
   const buttons = state.profiles.map((p) => {
     const selected = state.selectedProfileIds.has(p.id)
-    const label = `${selected ? '✓' : '✗'} ${p.name}`
+    const label = `${selected ? '✅' : '◻️'} ${p.name}`
     return [Markup.button.callback(label, `search_toggle_${p.id}`)]
   })
 
@@ -38,8 +59,9 @@ function buildProfileKeyboard(
 }
 
 function buildResultsKeyboard(
-  results: Listing[],
-  page: number
+  results: SearchResult[],
+  page: number,
+  savedIds: Set<number>
 ): { reply_markup: InlineKeyboardMarkup } {
   const start = page * RESULTS_PER_PAGE
   const pageResults = results.slice(start, start + RESULTS_PER_PAGE)
@@ -47,17 +69,22 @@ function buildResultsKeyboard(
 
   const rows: InlineKeyboardButton[][] = []
 
-  // Each listing gets a row with detail number button and save button
   pageResults.forEach((listing, i) => {
+    const isSaved = savedIds.has(listing.dbId)
     rows.push([
       {
         text: `📷 ${start + i + 1}`,
         callback_data: `detail_${start + i}`,
       } as InlineKeyboardButton.CallbackButton,
-      {
-        text: messages.buttonSave,
-        callback_data: `save_${listing.source}_${listing.externalId}`,
-      } as InlineKeyboardButton.CallbackButton,
+      isSaved
+        ? ({
+            text: messages.buttonSaved,
+            callback_data: `saved_${listing.dbId}`,
+          } as InlineKeyboardButton.CallbackButton)
+        : ({
+            text: messages.buttonSave,
+            callback_data: `save_${listing.dbId}`,
+          } as InlineKeyboardButton.CallbackButton),
     ])
   })
 
@@ -81,7 +108,7 @@ function buildResultsKeyboard(
   return { reply_markup: { inline_keyboard: rows } }
 }
 
-function buildResultsMessage(results: Listing[], page: number): string {
+function buildResultsMessage(results: SearchResult[], page: number): string {
   const start = page * RESULTS_PER_PAGE
   const end = Math.min(start + RESULTS_PER_PAGE, results.length)
   const pageResults = results.slice(start, end)
@@ -120,8 +147,10 @@ export function registerSearchCommand(
     }
 
     const state: SearchState = {
+      phase: 'selecting',
       selectedProfileIds: new Set(),
       profiles,
+      savedIds: new Set(),
       page: 0,
     }
     userStates.set(telegramId, state)
@@ -133,7 +162,7 @@ export function registerSearchCommand(
   bot.action(/^search_toggle_(\d+)$/, async (ctx) => {
     const telegramId = ctx.from.id
     const state = userStates.get(telegramId)
-    if (!state) {
+    if (!state || state.phase !== 'selecting') {
       await ctx.answerCbQuery(messages.searchSessionExpired)
       return
     }
@@ -163,6 +192,7 @@ export function registerSearchCommand(
       return
     }
 
+    state.phase = 'entering_area'
     await ctx.editMessageText(messages.searchEnterArea)
     await ctx.answerCbQuery()
   })
@@ -172,7 +202,7 @@ export function registerSearchCommand(
     const telegramId = ctx.from.id
     const state = userStates.get(telegramId)
 
-    if (!state || state.selectedProfileIds.size === 0 || state.results) {
+    if (!state || state.phase !== 'entering_area') {
       return next()
     }
 
@@ -190,14 +220,16 @@ export function registerSearchCommand(
         minPlotSize: p.min_plot_size ?? undefined,
       }))
 
+    state.phase = 'browsing'
     await ctx.reply(messages.searchSearching)
 
     try {
-      const results = await registry.searchCombined(paramsList)
+      const rawResults = await registry.searchCombined(paramsList)
 
-      for (const listing of results) {
-        upsertListing(listing)
-      }
+      const results: SearchResult[] = rawResults.map((listing) => {
+        const dbListing = upsertListing(listing)
+        return { ...listing, dbId: dbListing.id }
+      })
 
       state.results = results
       state.page = 0
@@ -209,7 +241,7 @@ export function registerSearchCommand(
       }
 
       await ctx.reply(buildResultsMessage(results, 0), {
-        ...buildResultsKeyboard(results, 0),
+        ...buildResultsKeyboard(results, 0, state.savedIds),
         parse_mode: 'HTML',
       })
     } catch (error) {
@@ -232,7 +264,7 @@ export function registerSearchCommand(
     state.page = page
 
     await ctx.editMessageText(buildResultsMessage(state.results, page), {
-      ...buildResultsKeyboard(state.results, page),
+      ...buildResultsKeyboard(state.results, page, state.savedIds),
       parse_mode: 'HTML',
     })
     await ctx.answerCbQuery()
@@ -251,7 +283,7 @@ export function registerSearchCommand(
     state.page = page
 
     await ctx.reply(buildResultsMessage(state.results, page), {
-      ...buildResultsKeyboard(state.results, page),
+      ...buildResultsKeyboard(state.results, page, state.savedIds),
       parse_mode: 'HTML',
     })
     await ctx.answerCbQuery()
@@ -285,14 +317,20 @@ export function registerSearchCommand(
       listing.url
     )
 
+    const isSaved = state.savedIds.has(listing.dbId)
     const backButton: InlineKeyboardButton.CallbackButton = {
       text: messages.buttonBackToList,
       callback_data: `sback_${state.page}`,
     }
-    const saveButton: InlineKeyboardButton.CallbackButton = {
-      text: messages.buttonSave,
-      callback_data: `save_${listing.source}_${listing.externalId}`,
-    }
+    const saveButton: InlineKeyboardButton.CallbackButton = isSaved
+      ? {
+          text: messages.buttonSaved,
+          callback_data: `saved_${listing.dbId}`,
+        }
+      : {
+          text: messages.buttonSave,
+          callback_data: `save_${listing.dbId}`,
+        }
     const keyboard: InlineKeyboardMarkup = {
       inline_keyboard: [[saveButton, backButton]],
     }
@@ -321,25 +359,35 @@ export function registerSearchCommand(
     await ctx.answerCbQuery()
   })
 
-  // Save to favorites
-  bot.action(/^save_(.+)_(.+)$/, async (ctx) => {
+  // Save to favorites (new format: save_{dbId})
+  bot.action(/^save_(\d+)$/, async (ctx) => {
     const telegramId = ctx.from.id
     const user = findOrCreateUser(telegramId, ctx.from.username)
+    const dbId = parseInt(ctx.match[1], 10)
 
-    const source = ctx.match[1]
-    const externalId = ctx.match[2]
+    addFavorite(user.id, dbId)
 
-    const db = getDatabase()
-    const listing = db
-      .prepare('SELECT id FROM listings WHERE source = ? AND external_id = ?')
-      .get(source, externalId) as { id: number } | undefined
-
-    if (!listing) {
-      await ctx.answerCbQuery(messages.searchListingNotFound)
-      return
+    const state = userStates.get(telegramId)
+    if (state) {
+      state.savedIds.add(dbId)
+      // Update keyboard to show "Saved" button
+      if (state.results) {
+        try {
+          await ctx.editMessageReplyMarkup(
+            buildResultsKeyboard(state.results, state.page, state.savedIds)
+              .reply_markup
+          )
+        } catch {
+          // May fail if this is a detail view (photo message) — that's ok
+        }
+      }
     }
 
-    addFavorite(user.id, listing.id)
     await ctx.answerCbQuery(messages.searchSaved)
+  })
+
+  // Already saved — no-op toast
+  bot.action(/^saved_(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery(messages.searchAlreadySaved)
   })
 }

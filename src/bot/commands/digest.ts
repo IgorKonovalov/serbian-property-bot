@@ -36,7 +36,7 @@ export function registerDigestCommand(
       }
     } catch (error) {
       console.error('Digest command failed:', error)
-      await ctx.reply(messages.searchFailed)
+      await ctx.reply(messages.digestFailed)
     }
   })
 
