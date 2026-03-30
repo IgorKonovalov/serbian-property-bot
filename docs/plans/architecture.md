@@ -54,22 +54,24 @@ Define the full architecture for property-bot: modules, data flow, DB schema, bo
 
 - Register user, show welcome message with available commands
 
-### /search [profile_name] [area]
+### /search
 
 - User has multiple **search profiles** — named saved queries
 - Each profile has: name, keywords, optional numeric filters (price, size, plot)
-- Examples:
+- Profiles can be **combined** — run multiple profiles in one search, results merged and deduplicated
+- Examples of profiles:
   - "Banatska kuća" — keyword search
   - "Gospodska kuća" — keyword search
   - "Salonska kuća" — keyword search
   - "Porodična kuća >17 ari" — keyword + plot size filter
   - "Visina plafona >3m" — keyword + custom attribute
 - Flow:
-  1. `/search` — shows list of saved profiles as inline buttons
-  2. User picks a profile
-  3. Bot asks for area (free text)
-  4. Bot runs search with profile keywords + area across all sites
-- `/search Banatska kuća Novi Sad` — shortcut, skip the buttons
+  1. `/search` — shows list of saved profiles as **multi-select** inline buttons (toggle on/off)
+  2. Each profile button shows ✓/✗ to indicate selection state
+  3. User selects one or more profiles, then presses [Search]
+  4. Bot asks for area (free text)
+  5. Bot runs all selected profiles in parallel across all sites, merges and deduplicates results
+- Example: selecting "Banatska kuća" + "Gospodska kuća" + "Salonska kuća" gives a broad search across all traditional house types
 
 ### /profiles
 
@@ -212,7 +214,8 @@ class ParserRegistry {
   private parsers: Parser[] = []
 
   register(parser: Parser): void
-  async searchAll(params: SearchParams): Promise<Listing[]> // merge + sort by price
+  async searchAll(params: SearchParams): Promise<Listing[]> // single profile across all sites
+  async searchCombined(paramsList: SearchParams[]): Promise<Listing[]> // multiple profiles, merge + dedupe + sort by price
 }
 ```
 
@@ -255,11 +258,11 @@ src/
 
 ### Phase 1: Foundation
 
-- [ ] Set up SQLite database with schema and migrations
-- [ ] Define TypeScript interfaces (Listing, SearchParams, Parser)
-- [ ] Create parser registry
-- [ ] Initialize Telegraf bot with /start command
-- [ ] Wire up entry point: bot + DB init
+- [x] Set up SQLite database with schema and migrations
+- [x] Define TypeScript interfaces (Listing, SearchParams, Parser)
+- [x] Create parser registry
+- [x] Initialize Telegraf bot with /start command
+- [x] Wire up entry point: bot + DB init
 
 ### Phase 2: First Parser (halooglasi)
 
@@ -300,20 +303,22 @@ src/
 ### Phase 7: Deployment
 
 - [ ] Dockerfile
-- [ ] Fly.io config (fly.toml) with persistent volume
+- [ ] Deploy to Fly.io (fly.toml + persistent volume) or Serbian VPS
 - [ ] Environment variable setup
-- [ ] Deploy and verify
+- [ ] Verify scraping works from hosting IP (test geo-blocking)
+- [ ] If geo-blocked: migrate to Serbian VPS (~$3-5/month) for native Serbian IP
 
 ## Technical Decisions
 
-| Decision                          | Choice                                | Rationale                                                                                                        |
-| --------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Multiple search profiles per user | Keyword-based saved queries           | User searches for specific property types (Banatska kuća, Gospodska kuća, etc.) — not generic structured filters |
-| Prices normalized to EUR          | integer                               | All prices stored/displayed in EUR; convert RSD if encountered                                                   |
-| Area as free text                 | Not enum                              | Too many neighborhoods to enumerate; let sites handle matching                                                   |
-| Pagination size                   | 5 results                             | Telegram messages get unwieldy with more; keeps scrolling manageable                                             |
-| Minimal conversation              | Stateless commands + inline keyboards | Only area and profile editing need free text; everything else is buttons                                         |
-| Digest skip when empty            | No message if no changes              | Don't train users to ignore the bot                                                                              |
+| Decision                          | Choice                                | Rationale                                                                                                                |
+| --------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Multiple search profiles per user | Keyword-based saved queries           | User searches for specific property types (Banatska kuća, Gospodska kuća, etc.) — not generic structured filters         |
+| Combinable profiles               | Multi-select in /search               | User can run broad searches by combining e.g. all traditional house types. Results deduplicated by (source, external_id) |
+| Prices normalized to EUR          | integer                               | All prices stored/displayed in EUR; convert RSD if encountered                                                           |
+| Area as free text                 | Not enum                              | Too many neighborhoods to enumerate; let sites handle matching                                                           |
+| Pagination size                   | 5 results                             | Telegram messages get unwieldy with more; keeps scrolling manageable                                                     |
+| Minimal conversation              | Stateless commands + inline keyboards | Only area and profile editing need free text; everything else is buttons                                                 |
+| Digest skip when empty            | No message if no changes              | Don't train users to ignore the bot                                                                                      |
 
 ## Risks & Open Questions
 

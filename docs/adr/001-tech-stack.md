@@ -52,7 +52,7 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 | Database            | SQLite via `better-sqlite3`                      |
 | Scheduler           | `node-cron` (in-process)                         |
 | Config              | `dotenv`                                         |
-| Hosting             | Fly.io (free tier, persistent volume)            |
+| Hosting             | Fly.io initially; Serbian VPS if geo-blocking    |
 
 **Rationale:**
 
@@ -60,7 +60,7 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 - **Playwright over Puppeteer as fallback:** Multi-browser support gives more options if a site blocks Chromium. Better API. Only loaded when a parser actually needs it.
 - **SQLite:** Price history, favorites, and alert config are simple relational data for 5 users. SQLite is the simplest correct choice. No external service to manage.
 - **node-cron:** Bot already runs as a long-lived process. In-process cron for the daily 08:00 CET scrape avoids external infrastructure.
-- **Fly.io:** Supports always-on processes (needed for Telegraf polling + cron) and persistent volumes (needed for SQLite). Free tier covers this workload.
+- **Hosting strategy:** Start on Fly.io (free tier, persistent volumes, always-on processes). If Serbian property sites block or degrade non-Serbian IPs, migrate to a cheap Serbian VPS (~$3-5/month) which gives native Serbian IP without proxy complexity.
 - **kupujemprodajem.com deferred:** Requires login, adds session management complexity. Implement after the two public sites are working.
 
 ## Consequences
@@ -68,9 +68,10 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 **Positive:**
 
 - Lightweight footprint — bot runs in <100MB RAM (without Playwright)
-- Free hosting viable on Fly.io
+- Free or near-free hosting (Fly.io free tier, or ~$3-5/month Serbian VPS)
 - Simple deployment: single process handles bot + cron + DB
 - Playwright available as escape hatch if any site changes to client-side rendering
+- Hosting is portable — no vendor lock-in, just a Node.js process + SQLite file
 
 **Negative:**
 
@@ -78,6 +79,7 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 - SQLite file needs persistent volume on Fly.io (minor config)
 - Playwright fallback increases Docker image size when included
 - KP support deferred — users won't get KP listings initially
+- May need to migrate from Fly.io to Serbian VPS if sites geo-block (low risk — public listing sites unlikely to restrict)
 
 **Dependencies to add:**
 
