@@ -2,17 +2,18 @@ import { config } from './config'
 import { initDatabase } from './db/database'
 import { createBot } from './bot/bot'
 import { ParserRegistry } from './parsers/registry'
+import { HalooglasiParser } from './parsers/halooglasi'
 
 const db = initDatabase(config.dbPath)
 console.log(`Database initialized at ${config.dbPath}`)
 
 const registry = new ParserRegistry()
-// Parsers will be registered here in Phase 2
+registry.register(new HalooglasiParser())
 console.log(
-  `Parser registry ready (${registry.registeredSources.length} sources)`
+  `Parser registry ready (${registry.registeredSources.length} sources: ${registry.registeredSources.join(', ')})`
 )
 
-const bot = createBot()
+const bot = createBot(registry)
 
 bot.launch(() => {
   console.log('Property bot is running')
