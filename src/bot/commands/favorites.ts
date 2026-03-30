@@ -27,8 +27,7 @@ function buildFavoritesMessage(userId: number): {
 
     lines.push(
       `${i + 1}. 🏠 ${rooms}${size} — ${price}\n` +
-        `📍 ${location || 'Н/Д'}\n` +
-        `🔗 ${fav.source}`
+        `📍 ${location || 'Н/Д'} | <a href="${fav.url}">${fav.source}</a>`
     )
 
     rows.push([
@@ -55,7 +54,7 @@ export function registerFavoritesCommand(bot: Telegraf): void {
     const { text, keyboard } = buildFavoritesMessage(user.id)
 
     if (keyboard) {
-      await ctx.reply(text, keyboard)
+      await ctx.reply(text, { ...keyboard, parse_mode: 'HTML' })
     } else {
       await ctx.reply(text)
     }
@@ -69,7 +68,7 @@ export function registerFavoritesCommand(bot: Telegraf): void {
     const { text, keyboard } = buildFavoritesMessage(user.id)
 
     if (keyboard) {
-      await ctx.editMessageText(text, keyboard)
+      await ctx.editMessageText(text, { ...keyboard, parse_mode: 'HTML' })
     } else {
       await ctx.editMessageText(text)
     }

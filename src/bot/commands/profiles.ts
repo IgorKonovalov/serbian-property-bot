@@ -204,11 +204,16 @@ export function registerProfilesCommand(bot: Telegraf): void {
   })
 
   bot.action(/^prof_editk_(\d+)$/, async (ctx) => {
+    const user = findOrCreateUser(ctx.from.id, ctx.from.username)
+    const profileId = parseInt(ctx.match[1], 10)
+    const profile = getProfileById(profileId, user.id)
     userStates.set(ctx.from.id, {
       action: 'edit_keywords',
-      profileId: parseInt(ctx.match[1], 10),
+      profileId,
     })
-    await ctx.editMessageText(messages.profilesEnterKeywords)
+    await ctx.editMessageText(
+      `Текущие ключевые слова: "${profile?.keywords ?? ''}"\nВведите новые:`
+    )
     await ctx.answerCbQuery()
   })
 
@@ -233,11 +238,11 @@ export function registerProfilesCommand(bot: Telegraf): void {
       case 'add_name':
         state.name = text
         state.action = 'add_keywords'
-        await ctx.reply(messages.profilesEnterKeywords)
+        await ctx.reply(messages.profilesEnterKeywords(text))
         break
 
       case 'add_keywords':
-        state.keywords = text
+        state.keywords = text === '-' ? state.name! : text
         state.action = 'add_filters'
         await ctx.reply(messages.profilesEnterFilters)
         break

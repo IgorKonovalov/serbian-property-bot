@@ -118,6 +118,10 @@ export function parsePage(html: string): Listing[] {
     // Skip rentals (Izdavanje)
     if (meta.includes('Izdavanje')) return
 
+    // Image is in parent .offer row, not inside .offer-body
+    const offerRow = item.closest('.offer')
+    const imageUrl = offerRow.find('img.img-fluid').attr('src') ?? null
+
     listings.push({
       externalId,
       source: 'nekretnine',
@@ -129,6 +133,7 @@ export function parsePage(html: string): Listing[] {
       rooms: null, // not shown in listing cards
       area,
       city,
+      imageUrl,
     })
   })
 

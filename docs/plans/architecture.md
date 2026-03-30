@@ -330,16 +330,23 @@ src/
 - [x] Send digest to each user (skip if nothing to report)
 - [x] Implement /digest for on-demand digest
 
-### Phase 7: Listing Images & Links
+### Phase 7: Listing Images, Links & Digest Buttons
 
-- [ ] Add `imageUrl` to Listing interface and `image_url` to DB schema (migration)
-- [ ] Extract thumbnail URLs in halooglasi parser (plain CDN URLs)
-- [ ] Extract thumbnail URLs in nekretnine parser (signed URLs)
-- [ ] Add clickable inline URL links to list view (site name links to listing page, HTML parse mode)
-- [ ] Add numbered inline buttons to list view for opening detail view
-- [ ] Implement detail view: `sendPhoto` with image, caption with inline URL link, and buttons
-- [ ] Fallback to text-only detail if no image available
-- [ ] Add [← Назад к списку] button in detail view to return to list
+- [x] Add `imageUrl` to Listing interface and `image_url` to DB schema (migration)
+- [x] Extract thumbnail URLs in halooglasi parser (plain CDN URLs)
+- [x] Extract thumbnail URLs in nekretnine parser (signed URLs)
+- [x] Add clickable inline URL links to list view (site name links to listing page, HTML parse mode)
+- [x] Add numbered inline buttons to list view for opening detail view
+- [x] Implement detail view: `sendPhoto` with image, caption with inline URL link, and buttons
+- [x] Fallback to text-only detail if no image available
+- [x] Add [← Назад к списку] button in detail view to return to list
+- [x] Refactor digest to summary + category buttons:
+  - Digest message becomes a compact summary with counts (e.g., "3 новых, 2 изменения цен")
+  - Inline button `🆕 Новые (с DD.MM)` — shows "new since" date based on last digest/scrape timestamp
+  - Inline button `📊 Цены (N изм.)` — shows count of price changes
+  - Tapping a button sends a follow-up message with the detailed list for that category
+  - Buttons only shown when the respective category has data (skip empty categories)
+  - Works for both scheduled digest (`sendDigestToAll`) and on-demand `/digest` command
 
 ### Phase 8: Deployment
 

@@ -78,6 +78,8 @@ export function parsePage(html: string): Listing[] {
     const city = locations[0] ?? null
     const area = locations.slice(1).join(', ') || null
 
+    const imageUrl = item.find('.pi-img-wrapper img').attr('src') ?? null
+
     const features = item
       .find('.product-features li .value-wrapper')
       .map(function () {
@@ -104,6 +106,7 @@ export function parsePage(html: string): Listing[] {
       rooms,
       area,
       city,
+      imageUrl,
     })
   })
 

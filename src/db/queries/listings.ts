@@ -13,6 +13,7 @@ interface DbListing {
   rooms: number | null
   area: string | null
   city: string | null
+  image_url: string | null
   raw_data: string | null
   first_seen_at: string
   last_seen_at: string
@@ -29,7 +30,7 @@ export function upsertListing(listing: Listing): DbListing {
     db.prepare(
       `UPDATE listings
        SET title = ?, price = ?, size = ?, plot_size = ?, rooms = ?,
-           area = ?, city = ?, url = ?, last_seen_at = datetime('now')
+           area = ?, city = ?, image_url = ?, url = ?, last_seen_at = datetime('now')
        WHERE id = ?`
     ).run(
       listing.title,
@@ -39,6 +40,7 @@ export function upsertListing(listing: Listing): DbListing {
       listing.rooms,
       listing.area,
       listing.city,
+      listing.imageUrl,
       listing.url,
       existing.id
     )
@@ -55,8 +57,8 @@ export function upsertListing(listing: Listing): DbListing {
 
   const result = db
     .prepare(
-      `INSERT INTO listings (external_id, source, url, title, price, size, plot_size, rooms, area, city)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO listings (external_id, source, url, title, price, size, plot_size, rooms, area, city, image_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       listing.externalId,
@@ -68,7 +70,8 @@ export function upsertListing(listing: Listing): DbListing {
       listing.plotSize,
       listing.rooms,
       listing.area,
-      listing.city
+      listing.city,
+      listing.imageUrl
     )
 
   const id = result.lastInsertRowid as number

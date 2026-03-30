@@ -20,6 +20,7 @@ interface FavoriteWithListing {
   rooms: number | null
   area: string | null
   city: string | null
+  image_url: string | null
   added_at: string
 }
 
@@ -59,7 +60,7 @@ export function getUserFavorites(userId: number): FavoriteWithListing[] {
       `SELECT f.id as favorite_id, l.id as listing_id,
               l.external_id, l.source, l.url, l.title,
               l.price, l.size, l.plot_size, l.rooms,
-              l.area, l.city, f.added_at
+              l.area, l.city, l.image_url, f.added_at
        FROM favorites f
        JOIN listings l ON f.listing_id = l.id
        WHERE f.user_id = ?

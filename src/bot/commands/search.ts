@@ -47,12 +47,13 @@ function buildResultsKeyboard(
 
   const rows: InlineKeyboardButton[][] = []
 
-  pageResults.forEach((listing) => {
+  // Each listing gets a row with detail number button and save button
+  pageResults.forEach((listing, i) => {
     rows.push([
       {
-        text: messages.buttonView,
-        url: listing.url,
-      } as InlineKeyboardButton.UrlButton,
+        text: `📷 ${start + i + 1}`,
+        callback_data: `detail_${start + i}`,
+      } as InlineKeyboardButton.CallbackButton,
       {
         text: messages.buttonSave,
         callback_data: `save_${listing.source}_${listing.externalId}`,
@@ -95,7 +96,8 @@ function buildResultsMessage(results: Listing[], page: number): string {
         l.price,
         l.city,
         l.area,
-        l.source
+        l.source,
+        l.url
       )
     )
     .join('\n\n')
@@ -206,10 +208,10 @@ export function registerSearchCommand(
         return
       }
 
-      await ctx.reply(
-        buildResultsMessage(results, 0),
-        buildResultsKeyboard(results, 0)
-      )
+      await ctx.reply(buildResultsMessage(results, 0), {
+        ...buildResultsKeyboard(results, 0),
+        parse_mode: 'HTML',
+      })
     } catch (error) {
       console.error('Search failed:', error)
       await ctx.reply(messages.searchFailed)
@@ -229,10 +231,93 @@ export function registerSearchCommand(
     const page = parseInt(ctx.match[1], 10)
     state.page = page
 
-    await ctx.editMessageText(
-      buildResultsMessage(state.results, page),
-      buildResultsKeyboard(state.results, page)
+    await ctx.editMessageText(buildResultsMessage(state.results, page), {
+      ...buildResultsKeyboard(state.results, page),
+      parse_mode: 'HTML',
+    })
+    await ctx.answerCbQuery()
+  })
+
+  // Back to list from detail view (sends new message since detail may be a photo)
+  bot.action(/^sback_(\d+)$/, async (ctx) => {
+    const telegramId = ctx.from.id
+    const state = userStates.get(telegramId)
+    if (!state?.results) {
+      await ctx.answerCbQuery(messages.searchSessionExpired)
+      return
+    }
+
+    const page = parseInt(ctx.match[1], 10)
+    state.page = page
+
+    await ctx.reply(buildResultsMessage(state.results, page), {
+      ...buildResultsKeyboard(state.results, page),
+      parse_mode: 'HTML',
+    })
+    await ctx.answerCbQuery()
+  })
+
+  // Detail view — show photo + details for a single listing
+  bot.action(/^detail_(\d+)$/, async (ctx) => {
+    const telegramId = ctx.from.id
+    const state = userStates.get(telegramId)
+    if (!state?.results) {
+      await ctx.answerCbQuery(messages.searchSessionExpired)
+      return
+    }
+
+    const index = parseInt(ctx.match[1], 10)
+    const listing = state.results[index]
+    if (!listing) {
+      await ctx.answerCbQuery(messages.searchListingNotFound)
+      return
+    }
+
+    const caption = messages.detailCaption(
+      listing.title,
+      listing.rooms,
+      listing.size,
+      listing.price,
+      listing.city,
+      listing.area,
+      listing.plotSize,
+      listing.source,
+      listing.url
     )
+
+    const backButton: InlineKeyboardButton.CallbackButton = {
+      text: messages.buttonBackToList,
+      callback_data: `sback_${state.page}`,
+    }
+    const saveButton: InlineKeyboardButton.CallbackButton = {
+      text: messages.buttonSave,
+      callback_data: `save_${listing.source}_${listing.externalId}`,
+    }
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [[saveButton, backButton]],
+    }
+
+    try {
+      if (listing.imageUrl) {
+        await ctx.replyWithPhoto(listing.imageUrl, {
+          caption,
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        })
+      } else {
+        await ctx.reply(caption, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        })
+      }
+    } catch {
+      // Fallback to text if photo fails
+      await ctx.reply(caption, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+      })
+    }
+
     await ctx.answerCbQuery()
   })
 

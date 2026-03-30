@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS listings (
   rooms INTEGER,
   area TEXT,
   city TEXT,
+  image_url TEXT,
   raw_data TEXT,
   first_seen_at TEXT DEFAULT (datetime('now')),
   last_seen_at TEXT DEFAULT (datetime('now')),
@@ -71,6 +72,14 @@ export function initDatabase(dbPath: string): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(SCHEMA)
+
+  // Migration: add image_url column if missing (for existing databases)
+  const columns = db.prepare("PRAGMA table_info('listings')").all() as {
+    name: string
+  }[]
+  if (!columns.some((c) => c.name === 'image_url')) {
+    db.exec('ALTER TABLE listings ADD COLUMN image_url TEXT')
+  }
 
   return db
 }

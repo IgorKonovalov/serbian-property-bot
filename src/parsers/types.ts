@@ -9,6 +9,7 @@ export interface Listing {
   rooms: number | null
   area: string | null
   city: string | null
+  imageUrl: string | null // thumbnail URL
 }
 
 export interface SearchParams {

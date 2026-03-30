@@ -30,7 +30,12 @@ export const messages = {
   profilesDeleted: 'Профиль удалён.',
   profilesNotFound: 'Профиль не найден.',
   profilesEnterName: 'Введите название профиля:',
-  profilesEnterKeywords: 'Введите ключевые слова для поиска (на сербском):',
+  profilesEnterKeywords(defaultName: string): string {
+    return (
+      'Введите ключевые слова для поиска (на сербском).\n' +
+      `Или отправьте "-" чтобы использовать название: "${defaultName}"`
+    )
+  },
   profilesEnterFilters:
     'Введите фильтры (необязательно, формат: цена_от-цена_до, м²_от-м²_до, плац_от).\n' +
     'Например: "50000-200000, 80-200, 10"\n' +
@@ -58,6 +63,18 @@ export const messages = {
   buttonSave: '⭐ Сохранить',
   buttonPrev: '← Назад',
   buttonNext: 'Далее →',
+  buttonBackToList: '← Назад к списку',
+
+  // Digest buttons
+  digestSummaryTitle: '🏠 <b>Дайджест</b>\n\n',
+  digestNewButton(count: number, date: string): string {
+    return `🆕 Новые (с ${date}) — ${count}`
+  },
+  digestPriceButton(count: number): string {
+    return `📊 Цены (${count} изм.)`
+  },
+  digestNewTitle: '🆕 <b>Новые объявления:</b>\n\n',
+  digestPriceTitle: '📊 <b>Изменения цен:</b>\n\n',
 
   resultHeader(start: number, end: number, total: number): string {
     return `Показано ${start}-${end} из ${total}`
@@ -70,7 +87,8 @@ export const messages = {
     price: number | null,
     city: string | null,
     area: string | null,
-    source: string
+    source: string,
+    url: string
   ): string {
     const roomsStr = rooms ? `${rooms} комн., ` : ''
     const sizeStr = size ? `${size}м²` : ''
@@ -81,8 +99,35 @@ export const messages = {
 
     return (
       `${index}. 🏠 ${roomsStr}${sizeStr} — ${priceStr}\n` +
-      `📍 ${location || 'Н/Д'}\n` +
-      `🔗 ${source}`
+      `📍 ${location || 'Н/Д'} | <a href="${url}">${source}</a>`
+    )
+  },
+
+  detailCaption(
+    title: string | null,
+    rooms: number | null,
+    size: number | null,
+    price: number | null,
+    city: string | null,
+    area: string | null,
+    plotSize: number | null,
+    source: string,
+    url: string
+  ): string {
+    const titleStr = title ?? 'Без названия'
+    const roomsStr = rooms ? `${rooms} комн., ` : ''
+    const sizeStr = size ? `${size}м²` : ''
+    const priceStr = price
+      ? `€${price.toLocaleString('ru-RU')}`
+      : 'Цена не указана'
+    const location = [city, area].filter(Boolean).join(', ')
+    const plotStr = plotSize ? `\n📐 Участок: ${plotSize} ари` : ''
+
+    return (
+      `🏠 ${titleStr}, ${roomsStr}${sizeStr}\n` +
+      `💰 ${priceStr}\n` +
+      `📍 ${location || 'Н/Д'}${plotStr}\n` +
+      `🔗 <a href="${url}">${source}</a>`
     )
   },
 } as const

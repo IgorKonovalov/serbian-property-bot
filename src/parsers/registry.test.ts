@@ -13,6 +13,7 @@ function makeListing(overrides: Partial<Listing> = {}): Listing {
     rooms: 3,
     area: null,
     city: null,
+    imageUrl: null,
     ...overrides,
   }
 }
