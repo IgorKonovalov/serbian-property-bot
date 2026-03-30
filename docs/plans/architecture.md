@@ -95,19 +95,22 @@ Define the full architecture for property-bot: modules, data flow, DB schema, bo
 ### Search Results UX
 
 - Results merged from all sites, sorted by price (ascending)
-- **List view** — compact text, 5 results per page:
+- **List view** — compact text with clickable links, 5 results per page (HTML parse mode):
   ```
   1. 🏠 2 комн., 54м² — €52 000
-     📍 Нови Сад, Лиман | halooglasi.com
+     📍 Нови Сад, Лиман | <a href="https://...">halooglasi.com</a>
+     [⭐ Сохранить]
   2. 🏠 3 комн., 78м² — €65 000
-     📍 Нови Сад, Центар | nekretnine.rs
+     📍 Нови Сад, Центар | <a href="https://...">nekretnine.rs</a>
+     [⭐ Сохранить]
   ...
-  [1] [2] [3] [4] [5]
   [← Назад] [Далее →]
   Показано 1-5 из 23
   ```
-- Numbered inline buttons to view detail for each listing
+- Site name is an inline URL link — tap to open listing directly from the list
+- `[⭐ Сохранить]` inline button per listing to add to favorites
 - `[← Назад] [Далее →]` for pagination
+- Numbered inline buttons to open **detail view** with photo
 
 - **Detail view** — when user taps a listing number, send `sendPhoto` with:
   ```
@@ -116,8 +119,8 @@ Define the full architecture for property-bot: modules, data flow, DB schema, bo
   💰 €65 000
   📍 Нови Сад, Центар
   📐 Участок: 20 ари
-  🔗 nekretnine.rs
-  [🔗 Открыть на сайте] [⭐ Сохранить] [← Назад к списку]
+  🔗 <a href="https://...">nekretnine.rs</a>
+  [⭐ Сохранить] [← Назад к списку]
   ```
 - Photo sent by URL — Telegram fetches and caches it, no download needed
 - If no image available, fall back to text-only message
@@ -315,8 +318,8 @@ src/
 
 ### Phase 5: Second Parser (nekretnine)
 
-- [ ] Implement nekretnine.rs parser
-- [ ] Register in parser registry — search results now merge both sites
+- [x] Implement nekretnine.rs parser
+- [x] Register in parser registry — search results now merge both sites
 
 ### Phase 6: Scheduler & Digest
 
@@ -327,14 +330,16 @@ src/
 - [ ] Send digest to each user (skip if nothing to report)
 - [ ] Implement /digest for on-demand digest
 
-### Phase 7: Listing Images
+### Phase 7: Listing Images & Links
 
 - [ ] Add `imageUrl` to Listing interface and `image_url` to DB schema (migration)
 - [ ] Extract thumbnail URLs in halooglasi parser (plain CDN URLs)
 - [ ] Extract thumbnail URLs in nekretnine parser (signed URLs)
-- [ ] Split search results into list view (compact text) and detail view
-- [ ] Detail view: `sendPhoto` with image, caption, and inline buttons
+- [ ] Add clickable inline URL links to list view (site name links to listing page, HTML parse mode)
+- [ ] Add numbered inline buttons to list view for opening detail view
+- [ ] Implement detail view: `sendPhoto` with image, caption with inline URL link, and buttons
 - [ ] Fallback to text-only detail if no image available
+- [ ] Add [← Назад к списку] button in detail view to return to list
 
 ### Phase 8: Deployment
 
