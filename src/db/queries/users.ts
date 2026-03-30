@@ -37,3 +37,8 @@ export function getUserByTelegramId(telegramId: number): DbUser | undefined {
     .prepare('SELECT * FROM users WHERE telegram_id = ?')
     .get(telegramId) as DbUser | undefined
 }
+
+export function getAllUsers(): DbUser[] {
+  const db = getDatabase()
+  return db.prepare('SELECT * FROM users').all() as DbUser[]
+}

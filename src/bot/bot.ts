@@ -5,6 +5,7 @@ import { registerStartCommand } from './commands/start'
 import { registerSearchCommand } from './commands/search'
 import { registerProfilesCommand } from './commands/profiles'
 import { registerFavoritesCommand } from './commands/favorites'
+import { registerDigestCommand } from './commands/digest'
 
 export function createBot(registry: ParserRegistry): Telegraf {
   const bot = new Telegraf(config.botToken)
@@ -13,6 +14,7 @@ export function createBot(registry: ParserRegistry): Telegraf {
   registerSearchCommand(bot, registry)
   registerProfilesCommand(bot)
   registerFavoritesCommand(bot)
+  registerDigestCommand(bot, registry)
 
   bot.catch((err, ctx) => {
     console.error(`Error for ${ctx.updateType}:`, err)

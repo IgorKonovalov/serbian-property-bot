@@ -323,12 +323,12 @@ src/
 
 ### Phase 6: Scheduler & Digest
 
-- [ ] node-cron job at 08:00 CET: scrape all sites for each user's config
-- [ ] Price change detection: compare new prices to last known
-- [ ] Record price history
-- [ ] Build digest message: price changes + new matches
-- [ ] Send digest to each user (skip if nothing to report)
-- [ ] Implement /digest for on-demand digest
+- [x] node-cron job at 08:00 CET: scrape all sites for each user's config
+- [x] Price change detection: compare new prices to last known
+- [x] Record price history
+- [x] Build digest message: price changes + new matches
+- [x] Send digest to each user (skip if nothing to report)
+- [x] Implement /digest for on-demand digest
 
 ### Phase 7: Listing Images & Links
 

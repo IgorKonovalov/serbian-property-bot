@@ -49,6 +49,10 @@ export const messages = {
   favoritesRemove: 'Удалить',
   favoritesRemoved: 'Удалено из избранного.',
 
+  // Digest
+  digestEmpty: 'Нет новых данных. Всё без изменений.',
+  digestLoading: '🔄 Собираю дайджест...',
+
   buttonSearch: '🔍 Искать',
   buttonView: 'Открыть',
   buttonSave: '⭐ Сохранить',

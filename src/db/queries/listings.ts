@@ -89,3 +89,50 @@ export function getListingById(id: number): DbListing | undefined {
     | DbListing
     | undefined
 }
+
+export interface PriceChange {
+  listing_id: number
+  title: string | null
+  url: string
+  source: string
+  old_price: number
+  new_price: number
+  city: string | null
+  area: string | null
+}
+
+export function getPriceChangesForUser(userId: number): PriceChange[] {
+  const db = getDatabase()
+  return db
+    .prepare(
+      `SELECT l.id as listing_id, l.title, l.url, l.source, l.city, l.area,
+              ph_prev.price as old_price, ph_last.price as new_price
+       FROM favorites f
+       JOIN listings l ON f.listing_id = l.id
+       JOIN price_history ph_last ON ph_last.listing_id = l.id
+       LEFT JOIN price_history ph_prev ON ph_prev.listing_id = l.id
+         AND ph_prev.recorded_at < ph_last.recorded_at
+       WHERE f.user_id = ?
+         AND ph_last.recorded_at = (
+           SELECT MAX(recorded_at) FROM price_history WHERE listing_id = l.id
+         )
+         AND ph_prev.recorded_at = (
+           SELECT MAX(recorded_at) FROM price_history
+           WHERE listing_id = l.id AND recorded_at < ph_last.recorded_at
+         )
+         AND ph_prev.price != ph_last.price
+         AND ph_last.recorded_at > datetime('now', '-1 day')`
+    )
+    .all(userId) as PriceChange[]
+}
+
+export function getNewListingsSince(hoursAgo: number): DbListing[] {
+  const db = getDatabase()
+  return db
+    .prepare(
+      `SELECT * FROM listings
+       WHERE first_seen_at > datetime('now', '-' || ? || ' hours')
+       ORDER BY first_seen_at DESC`
+    )
+    .all(hoursAgo) as DbListing[]
+}

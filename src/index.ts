@@ -4,6 +4,7 @@ import { createBot } from './bot/bot'
 import { ParserRegistry } from './parsers/registry'
 import { HalooglasiParser } from './parsers/halooglasi'
 import { NekretnineParser } from './parsers/nekretnine'
+import { startScheduler } from './scheduler/cron'
 
 const db = initDatabase(config.dbPath)
 console.log(`Database initialized at ${config.dbPath}`)
@@ -16,6 +17,8 @@ console.log(
 )
 
 const bot = createBot(registry)
+
+startScheduler(bot, registry)
 
 bot.launch(() => {
   console.log('Property bot is running')
