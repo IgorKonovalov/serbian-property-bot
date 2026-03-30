@@ -19,6 +19,7 @@ const config = {
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
           isolatedModules: true,
+          ignoreDeprecations: '6.0',
         },
       },
     ],
