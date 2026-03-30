@@ -26,14 +26,16 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 - Postgres pros: Multi-client, hosted free tiers available
 - Postgres cons: External dependency, network latency for simple queries, overkill at this scale
 
-### Hosting: Cloudflare Workers vs Fly.io vs Railway
+### Hosting: Cloudflare Workers vs Fly.io vs Railway vs Serbian VPS
 
 - Cloudflare Workers pros: Generous free tier, global edge
 - Cloudflare Workers cons: No persistent process (Telegraf needs long-running or webhook mode), no filesystem for SQLite, 10ms CPU limit on free tier, requires rearchitecting around request/response model
 - Fly.io pros: Free tier (3 shared VMs), persistent volumes for SQLite, always-on process, simple deploy
-- Fly.io cons: Free tier may change, requires Dockerfile
+- Fly.io cons: Free tier may change, no Serbian IP, doesn't scale well for multiple bots (each needs its own VM + volume)
 - Railway pros: Simple deploy from Git, free tier
-- Railway cons: Monthly hours cap on free tier, no persistent volumes
+- Railway cons: Monthly hours cap on free tier, no persistent volumes, no Serbian IP
+- Serbian VPS (JEAP, PlusHosting, MojServer ~€5-8/month) pros: Native Serbian IP, full root access, Docker Compose for multiple bots on one box, can also run VPN/proxy/Nextcloud/torrents, 2GB RAM handles 10+ lightweight bots
+- Serbian VPS cons: No free tier, manual server management, less polished DX than PaaS
 
 ### Headless browser: Puppeteer vs Playwright
 
@@ -52,7 +54,7 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 | Database            | SQLite via `better-sqlite3`                      |
 | Scheduler           | `node-cron` (in-process)                         |
 | Config              | `dotenv`                                         |
-| Hosting             | Fly.io initially; Serbian VPS if geo-blocking    |
+| Hosting             | Serbian VPS (~€5-8/mo) with Docker Compose       |
 
 **Rationale:**
 
@@ -60,7 +62,7 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 - **Playwright over Puppeteer as fallback:** Multi-browser support gives more options if a site blocks Chromium. Better API. Only loaded when a parser actually needs it.
 - **SQLite:** Price history, favorites, and alert config are simple relational data for 5 users. SQLite is the simplest correct choice. No external service to manage.
 - **node-cron:** Bot already runs as a long-lived process. In-process cron for the daily 08:00 CET scrape avoids external infrastructure.
-- **Hosting strategy:** Start on Fly.io (free tier, persistent volumes, always-on processes). If Serbian property sites block or degrade non-Serbian IPs, migrate to a cheap Serbian VPS (~$3-5/month) which gives native Serbian IP without proxy complexity.
+- **Serbian VPS with Docker Compose:** Native Serbian IP for scraping local property sites. Docker Compose lets all current and future Telegram bots run as containers on one machine. A 2GB VPS (~€5-8/month from JEAP, PlusHosting, or MojServer) handles 10+ lightweight Node.js bots. Same box can also run WireGuard VPN, Nextcloud, proxy, or torrent client. Full root access, no vendor lock-in.
 - **kupujemprodajem.com deferred:** Requires login, adds session management complexity. Implement after the two public sites are working.
 
 ## Consequences
@@ -68,18 +70,20 @@ property-bot is a Telegram bot for searching Serbian property listing sites (hal
 **Positive:**
 
 - Lightweight footprint — bot runs in <100MB RAM (without Playwright)
-- Free or near-free hosting (Fly.io free tier, or ~$3-5/month Serbian VPS)
-- Simple deployment: single process handles bot + cron + DB
+- Serbian VPS (~€5-8/month) hosts property-bot + future bots on one box via Docker Compose
+- Native Serbian IP — no geo-blocking issues with local property sites
+- Simple deployment: Docker Compose, each bot is a service with its own container + volume
+- VPS doubles as general-purpose server: VPN, cloud storage, proxy, torrents
 - Playwright available as escape hatch if any site changes to client-side rendering
-- Hosting is portable — no vendor lock-in, just a Node.js process + SQLite file
+- Hosting is portable — no vendor lock-in, just Docker containers + SQLite files
 
 **Negative:**
 
 - Two scraping code paths to maintain (cheerio + Playwright)
-- SQLite file needs persistent volume on Fly.io (minor config)
 - Playwright fallback increases Docker image size when included
 - KP support deferred — users won't get KP listings initially
-- May need to migrate from Fly.io to Serbian VPS if sites geo-block (low risk — public listing sites unlikely to restrict)
+- No free tier — ~€5-8/month cost (but shared across all bots and services)
+- Manual server management (Docker, updates, backups) vs managed PaaS
 
 **Dependencies to add:**
 

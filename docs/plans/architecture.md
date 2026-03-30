@@ -52,7 +52,7 @@ Define the full architecture for property-bot: modules, data flow, DB schema, bo
 
 ### /start
 
-- Register user, show welcome message with available commands
+- Register user, show welcome message in Russian with available commands
 
 ### /search
 
@@ -66,26 +66,26 @@ Define the full architecture for property-bot: modules, data flow, DB schema, bo
   - "Porodična kuća >17 ari" — keyword + plot size filter
   - "Visina plafona >3m" — keyword + custom attribute
 - Flow:
-  1. `/search` — shows list of saved profiles as **multi-select** inline buttons (toggle on/off)
+  1. `/poisk` — shows list of saved profiles as **multi-select** inline buttons (toggle on/off)
   2. Each profile button shows ✓/✗ to indicate selection state
-  3. User selects one or more profiles, then presses [Search]
-  4. Bot asks for area (free text)
+  3. User selects one or more profiles, then presses [🔍 Искать]
+  4. Bot asks: «Введите район/город» (free text)
   5. Bot runs all selected profiles in parallel across all sites, merges and deduplicates results
 - Example: selecting "Banatska kuća" + "Gospodska kuća" + "Salonska kuća" gives a broad search across all traditional house types
 
 ### /profiles
 
 - List all saved search profiles
-- Inline buttons: [Run] [Edit] [Delete] for each
-- [+ Add profile] button at the bottom
-- Adding/editing a profile: bot asks for name, keywords, optional filters (price range, min plot size, min size) as free text
+- Inline buttons: [Запустить] [Изменить] [Удалить] for each
+- [+ Добавить профиль] button at the bottom
+- Adding/editing a profile: bot asks for name, keywords, optional filters in Russian
 - Profiles are per-user and persist in DB
 
 ### /favorites
 
 - List user's favorited listings
 - Each listing shows: title, price, size, area, source site, link
-- Inline button to remove from favorites
+- Inline button [Удалить] to remove from favorites
 
 ### /digest
 
@@ -95,24 +95,48 @@ Define the full architecture for property-bot: modules, data flow, DB schema, bo
 ### Search Results UX
 
 - Results merged from all sites, sorted by price (ascending)
-- Each result shows:
+- **List view** — compact text, 5 results per page:
   ```
-  🏠 2-room, 54m² — €52,000
-  📍 Novi Sad, Liman
-  🔗 halooglasi.com
-  [View] [⭐ Save]
+  1. 🏠 2 комн., 54м² — €52 000
+     📍 Нови Сад, Лиман | halooglasi.com
+  2. 🏠 3 комн., 78м² — €65 000
+     📍 Нови Сад, Центар | nekretnine.rs
+  ...
+  [1] [2] [3] [4] [5]
+  [← Назад] [Далее →]
+  Показано 1-5 из 23
   ```
-- `[View]` — inline button, opens listing URL in browser
-- `[⭐ Save]` — inline button, adds to favorites
-- Paginated: 5 results per page, `[← Prev] [Next →]` buttons
-- Total count shown: "Showing 1-5 of 23 results"
+- Numbered inline buttons to view detail for each listing
+- `[← Назад] [Далее →]` for pagination
+
+- **Detail view** — when user taps a listing number, send `sendPhoto` with:
+  ```
+  [property photo]
+  🏠 Banatska kuća, 3 комн., 78м²
+  💰 €65 000
+  📍 Нови Сад, Центар
+  📐 Участок: 20 ари
+  🔗 nekretnine.rs
+  [🔗 Открыть на сайте] [⭐ Сохранить] [← Назад к списку]
+  ```
+- Photo sent by URL — Telegram fetches and caches it, no download needed
+- If no image available, fall back to text-only message
+
+### Images
+
+- Listing images are extracted during parsing as thumbnail URLs
+- **halooglasi.com** — plain CDN URLs (`img.halooglasi.com`), direct access, no expiration
+- **nekretnine.rs** — signed URLs with expiration params (`st=`, `ts=`, `e=`). Work if used soon after scraping; Telegram caches after first fetch so expiration doesn't matter
+- Images are shown only in **detail view** (one photo per message via `sendPhoto`), not in list view (avoids rate limits and keeps list compact)
+- `sendPhoto` supports caption (1024 chars) + inline keyboard — photo, details, and buttons in one message
+- `sendMediaGroup` (albums) does NOT support inline keyboards, so gallery view is not used
 
 ### Morning Digest (08:00 CET)
 
-- Sent to all users automatically
+- Sent to all users automatically, in Russian
 - Sections:
-  1. **Price changes** on favorited listings (old price → new price, with % change)
-  2. **New listings** matching user's active search profiles (top 10 per profile)
+  1. **Изменения цен** on favorited listings (старая цена → новая цена, with % change)
+  2. **Новые объявления** matching user's active search profiles (top 10 per profile)
 - If nothing to report: no message sent (don't spam)
 
 ## Database Schema
@@ -152,6 +176,7 @@ CREATE TABLE listings (
   rooms INTEGER,
   area TEXT,                               -- neighborhood/city
   city TEXT,
+  image_url TEXT,                          -- thumbnail URL from source site
   raw_data TEXT,                           -- full scraped JSON for debugging
   first_seen_at TEXT DEFAULT (datetime('now')),
   last_seen_at TEXT DEFAULT (datetime('now')),
@@ -189,6 +214,7 @@ interface Listing {
   rooms: number | null
   area: string | null
   city: string | null
+  imageUrl: string | null // thumbnail URL
 }
 
 interface SearchParams {
@@ -232,6 +258,7 @@ src/
       profiles.ts             — /profiles handler + CRUD for search profiles
       favorites.ts            — /favorites handler
       digest.ts               — /digest handler
+    messages.ts               — all Russian UI strings (centralized)
     keyboards/
       search-results.ts       — result card with View/Save buttons
       pagination.ts           — prev/next navigation
@@ -266,25 +293,25 @@ src/
 
 ### Phase 2: First Parser (halooglasi)
 
-- [ ] Implement halooglasi parser with cheerio
-- [ ] Map search params to halooglasi URL query parameters
-- [ ] Parse listing cards from HTML
-- [ ] Store results in DB with upsert logic
+- [x] Implement halooglasi parser with cheerio
+- [x] Map search params to halooglasi URL query parameters
+- [x] Parse listing cards from HTML
+- [x] Store results in DB with upsert logic
 
 ### Phase 3: Search & Results UX
 
-- [ ] Implement /search command — profile selection via inline buttons, then area input
-- [ ] Seed default profiles for new users (from user's list)
-- [ ] Merge results from registry, sort by price
-- [ ] Result cards with View/Save inline buttons
-- [ ] Pagination (5 per page)
+- [x] Implement /search command — profile selection via inline buttons, then area input
+- [x] Seed default profiles for new users (from user's list)
+- [x] Merge results from registry, sort by price
+- [x] Result cards with View/Save inline buttons
+- [x] Pagination (5 per page)
 
 ### Phase 4: Profiles & Favorites
 
-- [ ] Implement /profiles — list, add, edit, delete search profiles
-- [ ] Profile CRUD with inline keyboards
-- [ ] Implement /favorites — list, remove
-- [ ] Save button on search results adds to favorites
+- [x] Implement /profiles — list, add, edit, delete search profiles
+- [x] Profile CRUD with inline keyboards
+- [x] Implement /favorites — list, remove
+- [x] Save button on search results adds to favorites
 
 ### Phase 5: Second Parser (nekretnine)
 
@@ -300,25 +327,35 @@ src/
 - [ ] Send digest to each user (skip if nothing to report)
 - [ ] Implement /digest for on-demand digest
 
-### Phase 7: Deployment
+### Phase 7: Listing Images
 
-- [ ] Dockerfile
-- [ ] Deploy to Fly.io (fly.toml + persistent volume) or Serbian VPS
-- [ ] Environment variable setup
-- [ ] Verify scraping works from hosting IP (test geo-blocking)
-- [ ] If geo-blocked: migrate to Serbian VPS (~$3-5/month) for native Serbian IP
+- [ ] Add `imageUrl` to Listing interface and `image_url` to DB schema (migration)
+- [ ] Extract thumbnail URLs in halooglasi parser (plain CDN URLs)
+- [ ] Extract thumbnail URLs in nekretnine parser (signed URLs)
+- [ ] Split search results into list view (compact text) and detail view
+- [ ] Detail view: `sendPhoto` with image, caption, and inline buttons
+- [ ] Fallback to text-only detail if no image available
+
+### Phase 8: Deployment
+
+- [ ] Dockerfile (multi-stage build for small image)
+- [ ] docker-compose.yml (property-bot service + SQLite volume)
+- [ ] Environment variable setup (.env on VPS)
+- [ ] Deploy to Serbian VPS (JEAP, PlusHosting, or MojServer ~€5-8/mo)
+- [ ] Verify bot starts, scraping works, digest fires
 
 ## Technical Decisions
 
-| Decision                          | Choice                                | Rationale                                                                                                                |
-| --------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Multiple search profiles per user | Keyword-based saved queries           | User searches for specific property types (Banatska kuća, Gospodska kuća, etc.) — not generic structured filters         |
-| Combinable profiles               | Multi-select in /search               | User can run broad searches by combining e.g. all traditional house types. Results deduplicated by (source, external_id) |
-| Prices normalized to EUR          | integer                               | All prices stored/displayed in EUR; convert RSD if encountered                                                           |
-| Area as free text                 | Not enum                              | Too many neighborhoods to enumerate; let sites handle matching                                                           |
-| Pagination size                   | 5 results                             | Telegram messages get unwieldy with more; keeps scrolling manageable                                                     |
-| Minimal conversation              | Stateless commands + inline keyboards | Only area and profile editing need free text; everything else is buttons                                                 |
-| Digest skip when empty            | No message if no changes              | Don't train users to ignore the bot                                                                                      |
+| Decision                          | Choice                                     | Rationale                                                                                                                |
+| --------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Russian UI language               | All bot text, commands, buttons in Russian | Users are Russian-speaking; search keywords remain in Serbian (site queries)                                             |
+| Multiple search profiles per user | Keyword-based saved queries                | User searches for specific property types (Banatska kuća, Gospodska kuća, etc.) — not generic structured filters         |
+| Combinable profiles               | Multi-select in /search                    | User can run broad searches by combining e.g. all traditional house types. Results deduplicated by (source, external_id) |
+| Prices normalized to EUR          | integer                                    | All prices stored/displayed in EUR; convert RSD if encountered                                                           |
+| Area as free text                 | Not enum                                   | Too many neighborhoods to enumerate; let sites handle matching                                                           |
+| Pagination size                   | 5 results                                  | Telegram messages get unwieldy with more; keeps scrolling manageable                                                     |
+| Minimal conversation              | Stateless commands + inline keyboards      | Only area and profile editing need free text; everything else is buttons                                                 |
+| Digest skip when empty            | No message if no changes                   | Don't train users to ignore the bot                                                                                      |
 
 ## Risks & Open Questions
 
@@ -330,6 +367,7 @@ src/
 ## Acceptance Criteria
 
 - [ ] Bot responds to /start, /search, /profiles, /favorites, /digest
+- [ ] All bot messages, buttons, and prompts are in Russian
 - [ ] Search profiles support keyword queries with optional price/size/plot filters
 - [ ] Search returns merged, sorted results from halooglasi + nekretnine
 - [ ] Results show inline buttons for View (opens link) and Save (adds favorite)
