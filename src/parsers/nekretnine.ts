@@ -1,20 +1,11 @@
 import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
 import { paginatedSearch, fetchPage } from './base-parser'
+import { cityToSlug } from './utils'
+
+export { cityToSlug }
 
 const BASE_URL = 'https://www.nekretnine.rs/stambeni-objekti/kuce'
-
-export function cityToSlug(city: string): string {
-  return city
-    .toLowerCase()
-    .replace(/č/g, 'c')
-    .replace(/ć/g, 'c')
-    .replace(/š/g, 's')
-    .replace(/ž/g, 'z')
-    .replace(/đ/g, 'dj')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-}
 
 export function buildSearchUrl(params: SearchParams, page: number): string {
   const segments: string[] = [BASE_URL, 'prodaja']

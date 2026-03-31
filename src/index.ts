@@ -5,6 +5,8 @@ import { ParserRegistry } from './parsers/registry'
 import { HalooglasiParser } from './parsers/halooglasi'
 import { NekretnineParser } from './parsers/nekretnine'
 import { KupujemProdajemParser } from './parsers/kupujemprodajem'
+import { FourZidaParser } from './parsers/4zida'
+import { OglasiParser } from './parsers/oglasi'
 import { startScheduler } from './scheduler/cron'
 
 const db = initDatabase(config.dbPath)
@@ -14,6 +16,8 @@ const registry = new ParserRegistry()
 registry.register(new HalooglasiParser())
 registry.register(new NekretnineParser())
 registry.register(new KupujemProdajemParser())
+registry.register(new FourZidaParser())
+registry.register(new OglasiParser())
 console.log(
   `Parser registry ready (${registry.registeredSources.length} sources: ${registry.registeredSources.join(', ')})`
 )

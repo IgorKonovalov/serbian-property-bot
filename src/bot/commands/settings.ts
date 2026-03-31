@@ -8,6 +8,8 @@ const SOURCE_LABELS: Record<string, string> = {
   halooglasi: 'Halooglasi',
   nekretnine: 'Nekretnine.rs',
   kupujemprodajem: 'KupujemProdajem',
+  '4zida': '4zida.rs',
+  oglasi: 'Oglasi.rs',
 }
 
 function getSourceLabel(source: string): string {
