@@ -10,6 +10,12 @@ export const messages = {
   searchEnterArea: 'Введите район/город (например "Novi Sad", "Beograd"):',
   searchNoProfiles: 'У вас нет профилей поиска. Создайте через /profiles.',
   searchSelectAtLeast: 'Выберите хотя бы один профиль!',
+  searchEnterPrice:
+    'Введите диапазон цен в € (например "50000-200000").\n' +
+    'Или отправьте "-" чтобы пропустить:',
+  searchPriceInvalid:
+    'Неверный формат. Введите диапазон (50000-200000), максимум (200000) или "-" чтобы пропустить:',
+  searchChooseSort: 'Сортировка по цене:',
   searchSessionExpired: 'Сессия истекла. Используйте /search заново.',
   searchSearching: '🔍 Ищу...',
   searchNoResults: 'Ничего не найдено. Попробуйте другие профили или район.',
