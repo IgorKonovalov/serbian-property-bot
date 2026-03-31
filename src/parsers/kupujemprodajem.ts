@@ -14,8 +14,8 @@ export function buildSearchUrl(params: SearchParams, page: number): string {
   query.set('categoryId', '2821')
   query.set('groupId', '2823')
 
-  const keywords = [params.keywords, params.area].filter(Boolean).join(' ')
-  if (keywords) query.set('keywords', keywords)
+  if (params.keywords) query.set('keywords', params.keywords)
+  if (params.area) query.set('realEstateLocation', params.area)
 
   if (params.minPrice) query.set('priceFrom', String(params.minPrice))
   if (params.maxPrice) query.set('priceTo', String(params.maxPrice))

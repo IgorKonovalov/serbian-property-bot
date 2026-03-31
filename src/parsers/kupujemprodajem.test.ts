@@ -107,11 +107,12 @@ describe('parseLocation', () => {
 })
 
 describe('buildSearchUrl', () => {
-  it('builds URL with keywords and area', () => {
+  it('builds URL with keywords and area as separate params', () => {
     const url = buildSearchUrl({ keywords: 'kuća', area: 'Novi Sad' }, 1)
     expect(url).toContain('categoryId=2821')
     expect(url).toContain('groupId=2823')
-    expect(url).toContain('keywords=ku%C4%87a+Novi+Sad')
+    expect(url).toContain('keywords=ku%C4%87a')
+    expect(url).toContain('realEstateLocation=Novi+Sad')
     expect(url).toContain('currency=eur')
     expect(url).not.toContain('page=')
   })
