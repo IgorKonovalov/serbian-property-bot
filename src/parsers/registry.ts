@@ -14,8 +14,19 @@ export class ParserRegistry {
     const parsers = enabledSources
       ? this.parsers.filter((p) => enabledSources.includes(p.source))
       : this.parsers
-    const results = await Promise.all(parsers.map((p) => p.search(params)))
-    return results.flat().sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
+    const settled = await Promise.allSettled(
+      parsers.map((p) => p.search(params))
+    )
+    const results: Listing[] = []
+    for (const result of settled) {
+      if (result.status === 'fulfilled') {
+        results.push(...result.value)
+      } else {
+        const source = parsers[settled.indexOf(result)]?.source ?? 'unknown'
+        console.error(`Parser ${source} failed:`, result.reason?.message)
+      }
+    }
+    return results.sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
   }
 
   async searchCombined(
