@@ -152,23 +152,29 @@ export const messages = {
 
   resultCard(
     index: number,
+    title: string | null,
     rooms: number | null,
     size: number | null,
+    plotSize: number | null,
     price: number | null,
     city: string | null,
     area: string | null,
     source: string,
     url: string
   ): string {
-    const roomsStr = rooms ? `${rooms} комн., ` : ''
+    const titleStr = title ? escapeHtml(title) : ''
+    const roomsStr = rooms ? `${rooms} комн.` : ''
     const sizeStr = size ? `${size}м²` : ''
+    const specs = [roomsStr, sizeStr].filter(Boolean).join(', ')
+    const plotStr = plotSize ? ` | 📐 ${plotSize} ар` : ''
     const priceStr = price
       ? `€${price.toLocaleString('ru-RU')}`
       : 'Цена не указана'
     const location = [city, area].filter(Boolean).join(', ')
 
     return (
-      `${index}. 🏠 ${roomsStr}${sizeStr} — ${priceStr}\n` +
+      `${index}. 🏠 <b>${priceStr}</b>${specs ? ` — ${specs}` : ''}${plotStr}\n` +
+      (titleStr ? `${titleStr}\n` : '') +
       `📍 ${escapeHtml(location || 'Н/Д')} | <a href="${url}">${escapeHtml(source)}</a>`
     )
   },

@@ -10,8 +10,10 @@ describe('resultCard', () => {
   it('formats a full listing card', () => {
     const card = messages.resultCard(
       1,
+      'Beautiful house in Centar',
       3,
       65,
+      10,
       120000,
       'Beograd',
       'Centar',
@@ -22,6 +24,8 @@ describe('resultCard', () => {
     expect(card).toContain('3 комн.')
     expect(card).toContain('65м²')
     expect(card).toContain('120')
+    expect(card).toContain('Beautiful house in Centar')
+    expect(card).toContain('10 ар')
     expect(card).toContain('Beograd, Centar')
     expect(card).toContain('halooglasi')
     expect(card).toContain('https://example.com/1')
@@ -30,8 +34,10 @@ describe('resultCard', () => {
   it('handles null rooms', () => {
     const card = messages.resultCard(
       1,
+      'Test',
       null,
       50,
+      null,
       80000,
       'Novi Sad',
       null,
@@ -45,7 +51,9 @@ describe('resultCard', () => {
   it('handles null size', () => {
     const card = messages.resultCard(
       1,
+      'Test',
       2,
+      null,
       null,
       80000,
       'Novi Sad',
@@ -59,8 +67,10 @@ describe('resultCard', () => {
   it('shows fallback when price is null', () => {
     const card = messages.resultCard(
       1,
+      'Test',
       2,
       50,
+      null,
       null,
       'Novi Sad',
       null,
@@ -73,8 +83,10 @@ describe('resultCard', () => {
   it('shows Н/Д when city and area are null', () => {
     const card = messages.resultCard(
       1,
+      'Test',
       2,
       50,
+      null,
       80000,
       null,
       null,
@@ -84,11 +96,13 @@ describe('resultCard', () => {
     expect(card).toContain('Н/Д')
   })
 
-  it('escapes HTML in location', () => {
+  it('escapes HTML in location and title', () => {
     const card = messages.resultCard(
       1,
+      '<script>alert</script>',
       2,
       50,
+      null,
       80000,
       '<script>',
       null,
@@ -97,6 +111,39 @@ describe('resultCard', () => {
     )
     expect(card).toContain('&lt;script&gt;')
     expect(card).not.toContain('<script>')
+  })
+
+  it('handles null title', () => {
+    const card = messages.resultCard(
+      1,
+      null,
+      2,
+      50,
+      null,
+      80000,
+      'Beograd',
+      null,
+      'test',
+      'http://x'
+    )
+    expect(card).toContain('Beograd')
+    expect(card).not.toContain('undefined')
+  })
+
+  it('hides plot size when null', () => {
+    const card = messages.resultCard(
+      1,
+      'Test',
+      2,
+      50,
+      null,
+      80000,
+      'NS',
+      null,
+      'test',
+      'http://x'
+    )
+    expect(card).not.toContain('ар')
   })
 })
 

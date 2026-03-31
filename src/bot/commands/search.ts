@@ -119,8 +119,10 @@ function buildResultsMessage(results: SearchResult[], page: number): string {
     .map((l, i) =>
       messages.resultCard(
         start + i + 1,
+        l.title,
         l.rooms,
         l.size,
+        l.plotSize,
         l.price,
         l.city,
         l.area,
