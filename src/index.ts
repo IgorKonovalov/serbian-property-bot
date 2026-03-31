@@ -4,6 +4,7 @@ import { createBot } from './bot/bot'
 import { ParserRegistry } from './parsers/registry'
 import { HalooglasiParser } from './parsers/halooglasi'
 import { NekretnineParser } from './parsers/nekretnine'
+import { KupujemProdajemParser } from './parsers/kupujemprodajem'
 import { startScheduler } from './scheduler/cron'
 
 const db = initDatabase(config.dbPath)
@@ -12,6 +13,7 @@ console.log(`Database initialized at ${config.dbPath}`)
 const registry = new ParserRegistry()
 registry.register(new HalooglasiParser())
 registry.register(new NekretnineParser())
+registry.register(new KupujemProdajemParser())
 console.log(
   `Parser registry ready (${registry.registeredSources.length} sources: ${registry.registeredSources.join(', ')})`
 )

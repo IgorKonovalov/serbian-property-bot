@@ -60,6 +60,15 @@ CREATE TABLE IF NOT EXISTS favorites (
   added_at TEXT DEFAULT (datetime('now')),
   UNIQUE(user_id, listing_id)
 );
+
+CREATE TABLE IF NOT EXISTS user_settings (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, key)
+);
 `
 
 export function initDatabase(dbPath: string): Database.Database {

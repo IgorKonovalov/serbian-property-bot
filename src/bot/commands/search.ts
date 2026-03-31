@@ -7,6 +7,7 @@ import {
 } from '../../db/queries/search-profiles'
 import { upsertListing } from '../../db/queries/listings'
 import { addFavorite } from '../../db/queries/favorites'
+import { getEnabledSites } from '../../db/queries/user-settings'
 import type { ParserRegistry } from '../../parsers/registry'
 import type { Listing, SearchParams } from '../../parsers/types'
 import { messages } from '../messages'
@@ -224,7 +225,15 @@ export function registerSearchCommand(
     await ctx.reply(messages.searchSearching)
 
     try {
-      const rawResults = await registry.searchCombined(paramsList)
+      const user = findOrCreateUser(telegramId, ctx.from.username)
+      const enabledSources = getEnabledSites(
+        user.id,
+        registry.registeredSources
+      )
+      const rawResults = await registry.searchCombined(
+        paramsList,
+        enabledSources
+      )
 
       const results: SearchResult[] = rawResults.map((listing) => {
         const dbListing = upsertListing(listing)

@@ -2,6 +2,7 @@ import type { Telegraf } from 'telegraf'
 import type { InlineKeyboardButton, InlineKeyboardMarkup } from 'telegraf/types'
 import { getAllUsers } from '../db/queries/users'
 import { getUserProfiles } from '../db/queries/search-profiles'
+import { getEnabledSites } from '../db/queries/user-settings'
 import {
   getPriceChangesForUser,
   upsertListing,
@@ -66,7 +67,8 @@ export async function buildDigestData(
     }))
 
     try {
-      const results = await registry.searchCombined(paramsList)
+      const enabledSources = getEnabledSites(userId, registry.registeredSources)
+      const results = await registry.searchCombined(paramsList, enabledSources)
 
       for (const listing of results) {
         upsertListing(listing)
@@ -192,7 +194,11 @@ export async function refreshFavoritePrices(
     }))
 
     try {
-      const results = await registry.searchCombined(paramsList)
+      const enabledSources = getEnabledSites(
+        user.id,
+        registry.registeredSources
+      )
+      const results = await registry.searchCombined(paramsList, enabledSources)
       for (const listing of results) {
         upsertListing(listing)
       }

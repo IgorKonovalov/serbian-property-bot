@@ -7,7 +7,8 @@ export const messages = {
     '🔍 /search — Поиск недвижимости\n' +
     '📋 /profiles — Профили поиска\n' +
     '⭐ /favorites — Избранное\n' +
-    '📊 /digest — Изменения цен и новые объявления',
+    '📊 /digest — Изменения цен и новые объявления\n' +
+    '⚙️ /settings — Настройки',
 
   searchSelectProfiles: 'Выберите профили поиска (нажмите для переключения):',
   searchEnterArea: 'Введите район/город (например "Novi Sad", "Beograd"):',
@@ -128,6 +129,15 @@ export const messages = {
     '3. Новые объявления по вашим профилям тоже попадают в дайджест\n' +
     '4. Откройте /digest чтобы получить дайджест прямо сейчас\n' +
     '5. Если изменений нет — бот не беспокоит',
+
+  // Settings
+  settingsTitle: '⚙️ <b>Настройки</b>',
+  settingsSources: '🌐 Источники поиска',
+  settingsSourcesTitle:
+    '🌐 <b>Источники поиска</b>\n\nВключите или отключите сайты для поиска:',
+  settingsBackToMenu: '« Назад к настройкам',
+  settingsSiteEnabled: 'Включено',
+  settingsSiteDisabled: 'Отключено',
 
   resultHeader(start: number, end: number, total: number): string {
     return `Показано ${start}-${end} из ${total}`

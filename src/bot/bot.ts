@@ -7,6 +7,7 @@ import { registerProfilesCommand } from './commands/profiles'
 import { registerFavoritesCommand } from './commands/favorites'
 import { registerDigestCommand } from './commands/digest'
 import { registerHelpCommand } from './commands/help'
+import { registerSettingsCommand } from './commands/settings'
 
 export function createBot(registry: ParserRegistry): Telegraf {
   const bot = new Telegraf(config.botToken)
@@ -16,6 +17,7 @@ export function createBot(registry: ParserRegistry): Telegraf {
   registerProfilesCommand(bot)
   registerFavoritesCommand(bot)
   registerDigestCommand(bot, registry)
+  registerSettingsCommand(bot, registry)
   registerHelpCommand(bot)
 
   bot.catch((err, ctx) => {
