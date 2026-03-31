@@ -244,7 +244,11 @@ export function registerSearchCommand(
       state.page = 0
 
       if (results.length === 0) {
-        await ctx.reply(messages.searchNoResults)
+        await ctx.reply(messages.searchNoResults, {
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('🔍 Новый поиск', 'search_restart')],
+          ]),
+        })
         userStates.delete(telegramId)
         return
       }
@@ -398,5 +402,32 @@ export function registerSearchCommand(
   // Already saved — no-op toast
   bot.action(/^saved_(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery(messages.searchAlreadySaved)
+  })
+
+  // Restart search from "no results" screen
+  bot.action('search_restart', async (ctx) => {
+    const telegramId = ctx.from.id
+    const user = findOrCreateUser(telegramId, ctx.from.username)
+    const profiles = getUserProfiles(user.id)
+
+    if (profiles.length === 0) {
+      await ctx.answerCbQuery(messages.searchNoProfiles)
+      return
+    }
+
+    const state: SearchState = {
+      phase: 'selecting',
+      selectedProfileIds: new Set(),
+      profiles,
+      savedIds: new Set(),
+      page: 0,
+    }
+    userStates.set(telegramId, state)
+
+    await ctx.editMessageText(
+      messages.searchSelectProfiles,
+      buildProfileKeyboard(state)
+    )
+    await ctx.answerCbQuery()
   })
 }
