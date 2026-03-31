@@ -17,6 +17,7 @@ function getSourceLabel(source: string): string {
 function buildSettingsKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
   return Markup.inlineKeyboard([
     [Markup.button.callback(messages.settingsSources, 'set_sites')],
+    [Markup.button.callback(messages.buttonMainMenu, 'menu_back')],
   ])
 }
 
