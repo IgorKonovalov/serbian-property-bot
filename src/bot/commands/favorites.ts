@@ -123,6 +123,24 @@ export function registerFavoritesCommand(bot: Telegraf): void {
     }
   })
 
+  // Show favorites from menu button
+  bot.action('fav_show', async (ctx) => {
+    const user = findOrCreateUser(ctx.from.id, ctx.from.username)
+    userPages.set(ctx.from.id, 0)
+    const { text, keyboard } = buildFavoritesPage(user.id, 0)
+
+    await ctx.answerCbQuery()
+    if (keyboard) {
+      await ctx.reply(text, { ...keyboard, parse_mode: 'HTML' })
+    } else {
+      await ctx.reply(text, {
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback(messages.buttonNewSearch, 'search_restart')],
+        ]),
+      })
+    }
+  })
+
   // Pagination
   bot.action(/^fpage_(\d+)$/, async (ctx) => {
     const user = findOrCreateUser(ctx.from.id, ctx.from.username)

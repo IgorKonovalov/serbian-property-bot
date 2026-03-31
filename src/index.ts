@@ -24,6 +24,7 @@ startScheduler(bot, registry)
 
 bot.launch(async () => {
   await bot.telegram.setMyCommands([
+    { command: 'start', description: 'Главное меню' },
     { command: 'search', description: 'Поиск недвижимости' },
     { command: 'profiles', description: 'Профили поиска' },
     { command: 'favorites', description: 'Избранное' },

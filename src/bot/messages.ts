@@ -3,12 +3,8 @@ import { escapeHtml } from '../utils'
 export const messages = {
   welcome:
     '🏠 <b>Property Bot</b>\n\n' +
-    'Я помогу найти недвижимость в Сербии.\n\n' +
-    '🔍 /search — Поиск недвижимости\n' +
-    '📋 /profiles — Профили поиска\n' +
-    '⭐ /favorites — Избранное\n' +
-    '📊 /digest — Изменения цен и новые объявления\n' +
-    '⚙️ /settings — Настройки',
+    'Я помогу найти недвижимость в Сербии.\n' +
+    'Выберите действие:',
 
   searchSelectProfiles: 'Выберите профили поиска (нажмите для переключения):',
   searchEnterArea: 'Введите район/город (например "Novi Sad", "Beograd"):',
