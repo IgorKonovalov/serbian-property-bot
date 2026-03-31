@@ -133,6 +133,30 @@ describe('updateProfile', () => {
     updateProfile(profile.id, userId, { minPrice: null })
     expect(getProfileById(profile.id, userId)!.min_price).toBeNull()
   })
+
+  it('updates minSize', () => {
+    const profile = createProfile(userId, 'Test', 'kuća')
+    updateProfile(profile.id, userId, { minSize: 50 })
+    expect(getProfileById(profile.id, userId)!.min_size).toBe(50)
+  })
+
+  it('updates maxSize', () => {
+    const profile = createProfile(userId, 'Test', 'kuća')
+    updateProfile(profile.id, userId, { maxSize: 200 })
+    expect(getProfileById(profile.id, userId)!.max_size).toBe(200)
+  })
+
+  it('updates minPlotSize', () => {
+    const profile = createProfile(userId, 'Test', 'kuća')
+    updateProfile(profile.id, userId, { minPlotSize: 15 })
+    expect(getProfileById(profile.id, userId)!.min_plot_size).toBe(15)
+  })
+
+  it('updates isActive', () => {
+    const profile = createProfile(userId, 'Test', 'kuća')
+    updateProfile(profile.id, userId, { isActive: 0 })
+    expect(getProfileById(profile.id, userId)!.is_active).toBe(0)
+  })
 })
 
 describe('deleteProfile', () => {

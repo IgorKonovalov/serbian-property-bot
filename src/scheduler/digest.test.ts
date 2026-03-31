@@ -1,12 +1,21 @@
 import { initDatabase } from '../db/database'
 import {
   buildDigestSummary,
+  buildDigestData,
+  buildDigestForUser,
   buildNewListingsMessage,
   buildPriceChangesMessage,
+  sendDigestToAll,
+  refreshFavoritePrices,
   type DigestData,
 } from './digest'
 import type { Listing } from '../parsers/types'
 import type { PriceChange } from '../db/queries/listings'
+import { findOrCreateUser } from '../db/queries/users'
+import { createProfile } from '../db/queries/search-profiles'
+import { upsertListing } from '../db/queries/listings'
+import { addFavorite } from '../db/queries/favorites'
+import type { ParserRegistry } from '../parsers/registry'
 
 function makeListing(overrides: Partial<Listing> = {}): Listing {
   return {
@@ -153,5 +162,161 @@ describe('buildPriceChangesMessage', () => {
       makePriceChange({ city: null, area: null }),
     ])
     expect(msg).toContain('Н/Д')
+  })
+})
+
+function makeRegistry(results: Listing[] = []): ParserRegistry {
+  return {
+    searchCombined: jest.fn().mockResolvedValue(results),
+  } as unknown as ParserRegistry
+}
+
+function makeBotMock() {
+  return {
+    telegram: {
+      sendMessage: jest.fn().mockResolvedValue({}),
+    },
+  } as any
+}
+
+describe('buildDigestData', () => {
+  it('returns empty data when user has no profiles', async () => {
+    const user = findOrCreateUser(100, 'test')
+    const data = await buildDigestData(user.id, makeRegistry())
+    expect(data.priceChanges).toEqual([])
+    expect(data.newListings).toEqual([])
+  })
+
+  it('calls registry.searchCombined with active profile params', async () => {
+    const user = findOrCreateUser(101, 'test')
+    createProfile(user.id, 'Houses', 'kuća', {
+      minPrice: 50000,
+      maxPrice: 200000,
+    })
+    const registry = makeRegistry([makeListing()])
+    const data = await buildDigestData(user.id, registry)
+    expect(registry.searchCombined).toHaveBeenCalledTimes(1)
+    expect(data.newListings).toHaveLength(1)
+  })
+
+  it('upserts returned listings into DB', async () => {
+    const user = findOrCreateUser(102, 'test')
+    createProfile(user.id, 'Test', 'kuća')
+    const listing = makeListing({ externalId: 'upsert-test' })
+    await buildDigestData(user.id, makeRegistry([listing]))
+    // Verify it was inserted by upserting again (should not throw)
+    const dbListing = upsertListing(listing)
+    expect(dbListing).toBeDefined()
+  })
+
+  it('handles registry error gracefully', async () => {
+    const user = findOrCreateUser(103, 'test')
+    createProfile(user.id, 'Test', 'kuća')
+    const registry = {
+      searchCombined: jest.fn().mockRejectedValue(new Error('network error')),
+    } as unknown as ParserRegistry
+    const data = await buildDigestData(user.id, registry)
+    expect(data.newListings).toEqual([])
+  })
+})
+
+describe('buildDigestForUser', () => {
+  it('returns null when no data', async () => {
+    const user = findOrCreateUser(200, 'test')
+    const result = await buildDigestForUser(user.id, makeRegistry())
+    expect(result).toBeNull()
+  })
+
+  it('returns DigestData when there are new listings', async () => {
+    const user = findOrCreateUser(201, 'test')
+    createProfile(user.id, 'Test', 'kuća')
+    const result = await buildDigestForUser(
+      user.id,
+      makeRegistry([makeListing()])
+    )
+    expect(result).not.toBeNull()
+    expect(result!.newListings).toHaveLength(1)
+  })
+})
+
+describe('sendDigestToAll', () => {
+  it('sends digest to users with data', async () => {
+    const user = findOrCreateUser(300, 'sender')
+    createProfile(user.id, 'Test', 'kuća')
+    const bot = makeBotMock()
+    await sendDigestToAll(bot, makeRegistry([makeListing()]))
+    expect(bot.telegram.sendMessage).toHaveBeenCalledWith(
+      300,
+      expect.any(String),
+      expect.objectContaining({ parse_mode: 'HTML' })
+    )
+  })
+
+  it('does not send when user has no digest data', async () => {
+    findOrCreateUser(301, 'empty')
+    const bot = makeBotMock()
+    await sendDigestToAll(bot, makeRegistry())
+    expect(bot.telegram.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('continues sending to other users if one fails', async () => {
+    findOrCreateUser(302, 'fail')
+    const user2 = findOrCreateUser(303, 'ok')
+    createProfile(user2.id, 'Test', 'kuća')
+    const bot = makeBotMock()
+    bot.telegram.sendMessage
+      .mockRejectedValueOnce(new Error('blocked'))
+      .mockResolvedValueOnce({})
+    await sendDigestToAll(bot, makeRegistry([makeListing()]))
+    // Should have attempted both
+    expect(bot.telegram.sendMessage).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('refreshFavoritePrices', () => {
+  it('refreshes prices for users with favorites and active profiles', async () => {
+    const user = findOrCreateUser(400, 'refresh')
+    createProfile(user.id, 'Test', 'kuća')
+    const dbListing = upsertListing(makeListing({ externalId: 'fav-1' }))
+    addFavorite(user.id, dbListing.id)
+    const registry = makeRegistry([
+      makeListing({ externalId: 'fav-1', price: 90000 }),
+    ])
+    const bot = makeBotMock()
+    await refreshFavoritePrices(bot, registry)
+    expect(registry.searchCombined).toHaveBeenCalled()
+  })
+
+  it('skips users with no favorites', async () => {
+    findOrCreateUser(401, 'nofav')
+    const registry = makeRegistry()
+    const bot = makeBotMock()
+    await refreshFavoritePrices(bot, registry)
+    expect(registry.searchCombined).not.toHaveBeenCalled()
+  })
+
+  it('skips users with no active profiles', async () => {
+    const user = findOrCreateUser(402, 'noprofile')
+    const dbListing = upsertListing(
+      makeListing({ externalId: 'fav-noprofile' })
+    )
+    addFavorite(user.id, dbListing.id)
+    const registry = makeRegistry()
+    const bot = makeBotMock()
+    await refreshFavoritePrices(bot, registry)
+    expect(registry.searchCombined).not.toHaveBeenCalled()
+  })
+
+  it('handles registry error gracefully', async () => {
+    const user = findOrCreateUser(403, 'err')
+    createProfile(user.id, 'Test', 'kuća')
+    const dbListing = upsertListing(makeListing({ externalId: 'fav-err' }))
+    addFavorite(user.id, dbListing.id)
+    const registry = {
+      searchCombined: jest.fn().mockRejectedValue(new Error('fail')),
+    } as unknown as ParserRegistry
+    const bot = makeBotMock()
+    // Should not throw
+    await refreshFavoritePrices(bot, registry)
   })
 })

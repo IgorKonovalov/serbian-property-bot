@@ -214,6 +214,32 @@ describe('formatProfile', () => {
     expect(text).toContain('€...-100000')
   })
 
+  it('shows partial size filter with ellipsis', () => {
+    const text = messages.formatProfile({
+      name: 'T',
+      keywords: 'k',
+      min_price: null,
+      max_price: null,
+      min_size: 50,
+      max_size: null,
+      min_plot_size: null,
+    })
+    expect(text).toContain('50−...м²')
+  })
+
+  it('shows size filter with only max', () => {
+    const text = messages.formatProfile({
+      name: 'T',
+      keywords: 'k',
+      min_price: null,
+      max_price: null,
+      min_size: null,
+      max_size: 120,
+      min_plot_size: null,
+    })
+    expect(text).toContain('...−120м²')
+  })
+
   it('escapes HTML in name and keywords', () => {
     const text = messages.formatProfile({
       name: '<b>Bold</b>',

@@ -213,6 +213,24 @@ describe('parsePage', () => {
   it('returns empty for page with no offers', () => {
     expect(parsePage('<div class="empty-page"></div>')).toHaveLength(0)
   })
+
+  it('parses listing with a.offer-title (no wrapping h2)', () => {
+    const altHtml = `
+      <div class="row offer">
+        <div class="offer-body">
+          <a class="offer-title" href="/stambeni-objekti/kuce/alt/ALT001/">Alt Title House</a>
+          <p class="offer-price"><span>80 000 €</span></p>
+          <p class="offer-price offer-price--invert"><span>90 m²</span></p>
+          <div class="offer-location">Subotica, Srbija</div>
+          <div class="offer-adress">01.01.2026  |  Prodaja  |  Kuća</div>
+        </div>
+      </div>
+    `
+    const listings = parsePage(altHtml)
+    expect(listings).toHaveLength(1)
+    expect(listings[0].title).toBe('Alt Title House')
+    expect(listings[0].externalId).toBe('ALT001')
+  })
 })
 
 describe('hasNextPage', () => {
