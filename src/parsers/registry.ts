@@ -14,16 +14,29 @@ export class ParserRegistry {
     const parsers = enabledSources
       ? this.parsers.filter((p) => enabledSources.includes(p.source))
       : this.parsers
+    const skipped = enabledSources
+      ? this.parsers
+          .filter((p) => !enabledSources.includes(p.source))
+          .map((p) => p.source)
+      : []
+    if (skipped.length > 0) {
+      console.log(`[registry] Skipped disabled sources: ${skipped.join(', ')}`)
+    }
+    console.log(
+      `[registry] Searching ${parsers.map((p) => p.source).join(', ')} | keywords="${params.keywords}" area="${params.area}"`
+    )
     const settled = await Promise.allSettled(
       parsers.map((p) => p.search(params))
     )
     const results: Listing[] = []
-    for (const result of settled) {
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i]
+      const source = parsers[i]?.source ?? 'unknown'
       if (result.status === 'fulfilled') {
+        console.log(`[registry] ${source}: ${result.value.length} listings`)
         results.push(...result.value)
       } else {
-        const source = parsers[settled.indexOf(result)]?.source ?? 'unknown'
-        console.error(`Parser ${source} failed:`, result.reason?.message)
+        console.error(`[registry] ${source} FAILED:`, result.reason?.message)
       }
     }
     return results.sort((a, b) => (a.price ?? 0) - (b.price ?? 0))

@@ -222,6 +222,12 @@ export function registerSearchCommand(
       }))
 
     state.phase = 'browsing'
+    const profileNames = state.profiles
+      .filter((p) => state.selectedProfileIds.has(p.id))
+      .map((p) => p.name)
+    console.log(
+      `[search] User ${telegramId} | area="${area}" | profiles: ${profileNames.join(', ')} | params: ${paramsList.map((p) => `kw="${p.keywords}"`).join(', ')}`
+    )
     await ctx.reply(messages.searchSearching)
 
     try {
@@ -230,9 +236,14 @@ export function registerSearchCommand(
         user.id,
         registry.registeredSources
       )
+      console.log(`[search] Enabled sources: ${enabledSources.join(', ')}`)
+      const startTime = Date.now()
       const rawResults = await registry.searchCombined(
         paramsList,
         enabledSources
+      )
+      console.log(
+        `[search] Done: ${rawResults.length} total results (${Date.now() - startTime}ms)`
       )
 
       const results: SearchResult[] = rawResults.map((listing) => {

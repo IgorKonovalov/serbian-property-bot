@@ -128,7 +128,9 @@ export class HalooglasiParser implements Parser {
 
     for (let page = 1; page <= maxPages; page++) {
       const url = buildSearchUrl(params, page)
+      console.log(`[halooglasi] Fetching page ${page}: ${url}`)
 
+      const start = Date.now()
       const response = await axios.get(url, {
         headers: {
           'User-Agent': USER_AGENT,
@@ -137,8 +139,14 @@ export class HalooglasiParser implements Parser {
         },
         timeout: 15000,
       })
+      console.log(
+        `[halooglasi] Page ${page}: HTTP ${response.status} (${Date.now() - start}ms)`
+      )
 
       const listings = parsePage(response.data)
+      console.log(
+        `[halooglasi] Page ${page}: ${listings.length} listings parsed`
+      )
       allListings.push(...listings)
 
       if (!hasNextPage(response.data, page)) break

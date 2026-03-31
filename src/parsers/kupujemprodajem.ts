@@ -131,7 +131,9 @@ export class KupujemProdajemParser implements Parser {
 
     for (let page = 1; page <= maxPages; page++) {
       const url = buildSearchUrl(params, page)
+      console.log(`[kp] Fetching page ${page}: ${url}`)
 
+      const start = Date.now()
       const response = await axios.get(url, {
         headers: {
           'User-Agent': USER_AGENT,
@@ -140,8 +142,12 @@ export class KupujemProdajemParser implements Parser {
         },
         timeout: 15000,
       })
+      console.log(
+        `[kp] Page ${page}: HTTP ${response.status} (${Date.now() - start}ms)`
+      )
 
       const listings = parsePage(response.data)
+      console.log(`[kp] Page ${page}: ${listings.length} listings parsed`)
       allListings.push(...listings)
 
       if (!hasNextPage(response.data, page)) break
