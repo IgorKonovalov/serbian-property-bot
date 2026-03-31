@@ -11,6 +11,7 @@ import { getEnabledSites } from '../../db/queries/user-settings'
 import type { ParserRegistry } from '../../parsers/registry'
 import type { Listing, SearchParams } from '../../parsers/types'
 import { messages } from '../messages'
+import { hasActiveProfileState } from './profiles'
 
 interface SearchResult extends Listing {
   dbId: number
@@ -34,11 +35,27 @@ interface SearchState {
   results?: SearchResult[]
   savedIds: Set<number>
   page: number
+  createdAt: number
 }
 
 const RESULTS_PER_PAGE = 5
+const STATE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
 const userStates = new Map<number, SearchState>()
+
+export function hasActiveSearchState(telegramId: number): boolean {
+  return userStates.has(telegramId)
+}
+
+// Evict stale search states every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, state] of userStates) {
+    if (now - state.createdAt > STATE_TTL_MS) {
+      userStates.delete(key)
+    }
+  }
+}, 5 * 60 * 1000)
 
 export function startSearchWithProfiles(
   telegramId: number,
@@ -52,6 +69,7 @@ export function startSearchWithProfiles(
     sortOrder: 'asc',
     savedIds: new Set(),
     page: 0,
+    createdAt: Date.now(),
   }
   userStates.set(telegramId, state)
   return state
@@ -68,6 +86,7 @@ export function startSearchFromMenu(
     sortOrder: 'asc',
     savedIds: new Set(),
     page: 0,
+    createdAt: Date.now(),
   }
   userStates.set(telegramId, state)
 }
@@ -265,6 +284,7 @@ export function registerSearchCommand(
       sortOrder: 'asc',
       savedIds: new Set(),
       page: 0,
+      createdAt: Date.now(),
     }
     userStates.set(telegramId, state)
 
@@ -316,10 +336,17 @@ export function registerSearchCommand(
     const state = userStates.get(telegramId)
 
     if (!state) return next()
+    // Skip if user is in a profile wizard
+    if (hasActiveProfileState(telegramId)) return next()
 
     // Phase: entering area
     if (state.phase === 'entering_area') {
-      state.area = ctx.message.text.trim()
+      const area = ctx.message.text.trim()
+      if (area.length > 100) {
+        await ctx.reply(messages.searchAreaTooLong)
+        return
+      }
+      state.area = area
       state.phase = 'entering_price'
       await ctx.reply(messages.searchEnterPrice)
       return
@@ -533,6 +560,7 @@ export function registerSearchCommand(
       sortOrder: 'asc',
       savedIds: new Set(),
       page: 0,
+      createdAt: Date.now(),
     }
     userStates.set(telegramId, state)
 

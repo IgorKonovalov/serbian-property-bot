@@ -131,17 +131,6 @@ export function buildPriceChangesMessage(changes: PriceChange[]): string {
   return messages.digestPriceTitle + changes.map(formatPriceChange).join('\n\n')
 }
 
-// Legacy function for backward compatibility with buildDigestForUser
-export async function buildDigestForUser(
-  userId: number,
-  registry: ParserRegistry
-): Promise<DigestData | null> {
-  const data = await buildDigestData(userId, registry)
-  if (data.priceChanges.length === 0 && data.newListings.length === 0)
-    return null
-  return data
-}
-
 export async function sendDigestToAll(
   bot: Telegraf,
   registry: ParserRegistry

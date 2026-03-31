@@ -52,7 +52,9 @@ export function upsertListing(listing: Listing): DbListing {
       ).run(existing.id, listing.price)
     }
 
-    return { ...existing, ...listing, id: existing.id } as unknown as DbListing
+    return db
+      .prepare('SELECT * FROM listings WHERE id = ?')
+      .get(existing.id) as DbListing
   }
 
   const result = db

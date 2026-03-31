@@ -2,7 +2,6 @@ import { initDatabase } from '../db/database'
 import {
   buildDigestSummary,
   buildDigestData,
-  buildDigestForUser,
   buildNewListingsMessage,
   buildPriceChangesMessage,
   sendDigestToAll,
@@ -221,25 +220,6 @@ describe('buildDigestData', () => {
     } as unknown as ParserRegistry
     const data = await buildDigestData(user.id, registry)
     expect(data.newListings).toEqual([])
-  })
-})
-
-describe('buildDigestForUser', () => {
-  it('returns null when no data', async () => {
-    const user = findOrCreateUser(200, 'test')
-    const result = await buildDigestForUser(user.id, makeRegistry())
-    expect(result).toBeNull()
-  })
-
-  it('returns DigestData when there are new listings', async () => {
-    const user = findOrCreateUser(201, 'test')
-    createProfile(user.id, 'Test', 'kuća')
-    const result = await buildDigestForUser(
-      user.id,
-      makeRegistry([makeListing()])
-    )
-    expect(result).not.toBeNull()
-    expect(result!.newListings).toHaveLength(1)
   })
 })
 

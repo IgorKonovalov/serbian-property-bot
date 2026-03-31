@@ -23,6 +23,7 @@ export const messages = {
   searchSaved: '⭐ Сохранено в избранное!',
   searchAlreadySaved: 'Уже в избранном',
   searchListingNotFound: 'Объявление не найдено в базе.',
+  searchAreaTooLong: 'Название района слишком длинное (максимум 100 символов). Попробуйте короче.',
 
   // Profiles
   profilesList: '📋 Ваши профили поиска:',
@@ -34,6 +35,8 @@ export const messages = {
   profilesDelete: '🗑 Удалить',
   profilesDeleted: 'Профиль удалён.',
   profilesNotFound: 'Профиль не найден.',
+  profilesNameTooLong: 'Название слишком длинное (максимум 100 символов). Попробуйте короче.',
+  profilesKeywordsTooLong: 'Ключевые слова слишком длинные (максимум 200 символов). Попробуйте короче.',
   profilesEnterName: 'Введите название профиля:',
   profilesEnterKeywords(defaultName: string): string {
     return (

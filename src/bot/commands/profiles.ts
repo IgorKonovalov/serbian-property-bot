@@ -7,7 +7,7 @@ import {
   updateProfile,
   getProfileById,
 } from '../../db/queries/search-profiles'
-import { startSearchWithProfiles } from './search'
+import { startSearchWithProfiles, hasActiveSearchState } from './search'
 import { messages } from '../messages'
 import { escapeHtml } from '../../utils'
 
@@ -20,11 +20,26 @@ interface ProfileState {
     | 'edit_keywords'
     | 'edit_filters'
   profileId?: number
+  createdAt: number
   name?: string
   keywords?: string
 }
 
 const userStates = new Map<number, ProfileState>()
+
+export function hasActiveProfileState(telegramId: number): boolean {
+  return userStates.has(telegramId)
+}
+
+// Evict stale profile states every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, state] of userStates) {
+    if (now - state.createdAt > 30 * 60 * 1000) {
+      userStates.delete(key)
+    }
+  }
+}, 5 * 60 * 1000)
 
 function buildProfileListKeyboard(
   userId: number
@@ -185,7 +200,7 @@ export function registerProfilesCommand(bot: Telegraf): void {
 
   // Start adding profile
   bot.action('prof_add', async (ctx) => {
-    userStates.set(ctx.from.id, { action: 'add_name' })
+    userStates.set(ctx.from.id, { action: 'add_name', createdAt: Date.now() })
     await ctx.editMessageText(messages.profilesEnterName, cancelKeyboard())
     await ctx.answerCbQuery()
   })
@@ -235,6 +250,7 @@ export function registerProfilesCommand(bot: Telegraf): void {
     userStates.set(ctx.from.id, {
       action: 'edit_name',
       profileId: parseInt(ctx.match[1], 10),
+      createdAt: Date.now(),
     })
     await ctx.editMessageText(messages.profilesEnterName, cancelKeyboard())
     await ctx.answerCbQuery()
@@ -247,6 +263,7 @@ export function registerProfilesCommand(bot: Telegraf): void {
     userStates.set(ctx.from.id, {
       action: 'edit_keywords',
       profileId,
+      createdAt: Date.now(),
     })
     await ctx.editMessageText(
       `Текущие ключевые слова: "${escapeHtml(profile?.keywords ?? '')}"\nВведите новые:`,
@@ -259,6 +276,7 @@ export function registerProfilesCommand(bot: Telegraf): void {
     userStates.set(ctx.from.id, {
       action: 'edit_filters',
       profileId: parseInt(ctx.match[1], 10),
+      createdAt: Date.now(),
     })
     await ctx.editMessageText(messages.profilesEnterFilters, cancelKeyboard())
     await ctx.answerCbQuery()
@@ -268,18 +286,28 @@ export function registerProfilesCommand(bot: Telegraf): void {
   bot.on('text', async (ctx, next) => {
     const state = userStates.get(ctx.from.id)
     if (!state) return next()
+    // Skip if user is in a search flow
+    if (hasActiveSearchState(ctx.from.id)) return next()
 
     const user = findOrCreateUser(ctx.from.id, ctx.from.username)
     const text = ctx.message.text.trim()
 
     switch (state.action) {
       case 'add_name':
+        if (text.length > 100) {
+          await ctx.reply(messages.profilesNameTooLong)
+          return
+        }
         state.name = text
         state.action = 'add_keywords'
         await ctx.reply(messages.profilesEnterKeywords(text), cancelKeyboard())
         break
 
       case 'add_keywords':
+        if (text !== '-' && text.length > 200) {
+          await ctx.reply(messages.profilesKeywordsTooLong)
+          return
+        }
         state.keywords = text === '-' ? state.name! : text
         state.action = 'add_filters'
         await ctx.reply(messages.profilesEnterFilters, cancelKeyboard())
@@ -297,6 +325,10 @@ export function registerProfilesCommand(bot: Telegraf): void {
       }
 
       case 'edit_name':
+        if (text.length > 100) {
+          await ctx.reply(messages.profilesNameTooLong)
+          return
+        }
         updateProfile(state.profileId!, user.id, { name: text })
         userStates.delete(ctx.from.id)
         await ctx.reply(
@@ -306,6 +338,10 @@ export function registerProfilesCommand(bot: Telegraf): void {
         break
 
       case 'edit_keywords':
+        if (text.length > 200) {
+          await ctx.reply(messages.profilesKeywordsTooLong)
+          return
+        }
         updateProfile(state.profileId!, user.id, { keywords: text })
         userStates.delete(ctx.from.id)
         await ctx.reply(
