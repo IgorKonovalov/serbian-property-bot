@@ -40,8 +40,10 @@ interface SearchState {
 
 const RESULTS_PER_PAGE = 5
 const STATE_TTL_MS = 30 * 60 * 1000 // 30 minutes
+const SEARCH_COOLDOWN_MS = 30 * 1000 // 30 seconds
 
 const userStates = new Map<number, SearchState>()
+const lastSearchTime = new Map<number, number>()
 
 export function hasActiveSearchState(telegramId: number): boolean {
   return userStates.has(telegramId)
@@ -191,6 +193,13 @@ async function runSearch(
   state: SearchState,
   registry: ParserRegistry
 ): Promise<void> {
+  const lastSearch = lastSearchTime.get(telegramId)
+  if (lastSearch && Date.now() - lastSearch < SEARCH_COOLDOWN_MS) {
+    await ctx.reply(messages.searchCooldown)
+    return
+  }
+  lastSearchTime.set(telegramId, Date.now())
+
   const area = state.area ?? ''
   const paramsList: SearchParams[] = state.profiles
     .filter((p) => state.selectedProfileIds.has(p.id))

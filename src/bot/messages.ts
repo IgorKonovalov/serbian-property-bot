@@ -1,4 +1,4 @@
-import { escapeHtml } from '../utils'
+import { escapeHtml, escapeUrl } from '../utils'
 
 export const messages = {
   welcome:
@@ -24,6 +24,7 @@ export const messages = {
   searchAlreadySaved: 'Уже в избранном',
   searchListingNotFound: 'Объявление не найдено в базе.',
   searchAreaTooLong: 'Название района слишком длинное (максимум 100 символов). Попробуйте короче.',
+  searchCooldown: '⏳ Подождите 30 секунд перед следующим поиском.',
 
   // Profiles
   profilesList: '📋 Ваши профили поиска:',
@@ -103,7 +104,7 @@ export const messages = {
   // Help
   helpButton: '❓ Помощь',
   helpBack: '« К помощи',
-  helpIntro: '❓ <b>Помощь</b>\n\n' + 'Выберите тему, чтобы узнать подробнее:',
+  helpIntro: '❓ <b>Помощь</b>\n\nВыберите тему, чтобы узнать подробнее:',
   helpSearch:
     '🔍 <b>Поиск недвижимости</b>\n\n' +
     '1. Откройте /search\n' +
@@ -180,7 +181,7 @@ export const messages = {
     return (
       `${index}. 🏠 <b>${priceStr}</b>${specs ? ` — ${specs}` : ''}${plotStr}\n` +
       (titleStr ? `${titleStr}\n` : '') +
-      `📍 ${escapeHtml(location || 'Н/Д')} | <a href="${url}">${escapeHtml(source)}</a>`
+      `📍 ${escapeHtml(location || 'Н/Д')} | <a href="${escapeUrl(url)}">${escapeHtml(source)}</a>`
     )
   },
 
@@ -210,7 +211,7 @@ export const messages = {
       `🏠 ${titleStr}, ${roomsStr}${sizeStr}\n` +
       `💰 ${priceStr}\n` +
       `📍 ${location}${plotStr}\n` +
-      `🔗 <a href="${url}">${escapeHtml(source)}</a>`
+      `🔗 <a href="${escapeUrl(url)}">${escapeHtml(source)}</a>`
     )
   },
 

@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS listings (
   area TEXT,
   city TEXT,
   image_url TEXT,
-  raw_data TEXT,
   first_seen_at TEXT DEFAULT (datetime('now')),
   last_seen_at TEXT DEFAULT (datetime('now')),
   UNIQUE(source, external_id)
@@ -89,6 +88,19 @@ export function initDatabase(dbPath: string): Database.Database {
   if (!columns.some((c) => c.name === 'image_url')) {
     db.exec('ALTER TABLE listings ADD COLUMN image_url TEXT')
   }
+
+  // Migration: drop unused raw_data column
+  if (columns.some((c) => c.name === 'raw_data')) {
+    db.exec('ALTER TABLE listings DROP COLUMN raw_data')
+  }
+
+  // Migration: add indexes for price_history and favorites
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_price_history_listing
+      ON price_history(listing_id, recorded_at);
+    CREATE INDEX IF NOT EXISTS idx_favorites_user
+      ON favorites(user_id);
+  `)
 
   return db
 }

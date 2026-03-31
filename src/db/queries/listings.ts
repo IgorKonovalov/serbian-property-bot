@@ -14,7 +14,6 @@ interface DbListing {
   area: string | null
   city: string | null
   image_url: string | null
-  raw_data: string | null
   first_seen_at: string
   last_seen_at: string
 }
