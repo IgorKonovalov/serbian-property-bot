@@ -12,7 +12,11 @@ import {
 import type { Listing } from '../parsers/types'
 import type { PriceChange } from '../db/queries/listings'
 import { findOrCreateUser } from '../db/queries/users'
-import { createProfile } from '../db/queries/search-profiles'
+import {
+  createProfile,
+  getUserProfiles,
+  deleteProfile,
+} from '../db/queries/search-profiles'
 import { upsertListing } from '../db/queries/listings'
 import { addFavorite } from '../db/queries/favorites'
 import type { ParserRegistry } from '../parsers/registry'
@@ -261,15 +265,14 @@ describe('sendDigestToAll', () => {
 
   it('continues sending to other users if one fails', async () => {
     findOrCreateUser(302, 'fail')
-    const user2 = findOrCreateUser(303, 'ok')
-    createProfile(user2.id, 'Test', 'kuća')
+    findOrCreateUser(303, 'ok')
     const bot = makeBotMock()
     bot.telegram.sendMessage
       .mockRejectedValueOnce(new Error('blocked'))
       .mockResolvedValueOnce({})
     await sendDigestToAll(bot, makeRegistry([makeListing()]))
-    // Should have attempted both
-    expect(bot.telegram.sendMessage).toHaveBeenCalledTimes(1)
+    // Should have attempted both (both have default profiles)
+    expect(bot.telegram.sendMessage).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -297,6 +300,11 @@ describe('refreshFavoritePrices', () => {
 
   it('skips users with no active profiles', async () => {
     const user = findOrCreateUser(402, 'noprofile')
+    // Delete all default profiles
+    const profiles = getUserProfiles(user.id)
+    for (const p of profiles) {
+      deleteProfile(p.id, user.id)
+    }
     const dbListing = upsertListing(
       makeListing({ externalId: 'fav-noprofile' })
     )

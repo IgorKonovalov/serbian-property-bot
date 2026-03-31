@@ -1,6 +1,5 @@
 import { Telegraf, Markup } from 'telegraf'
 import { findOrCreateUser } from '../../db/queries/users'
-import { seedDefaultProfiles } from '../../db/queries/search-profiles'
 import { messages } from '../messages'
 
 export function registerStartCommand(bot: Telegraf): void {
@@ -8,8 +7,7 @@ export function registerStartCommand(bot: Telegraf): void {
     const telegramId = ctx.from.id
     const username = ctx.from.username
 
-    const user = findOrCreateUser(telegramId, username)
-    seedDefaultProfiles(user.id)
+    findOrCreateUser(telegramId, username)
 
     await ctx.reply(messages.welcome, {
       parse_mode: 'HTML',

@@ -1,4 +1,5 @@
 import { getDatabase } from '../database'
+import { seedDefaultProfiles } from './search-profiles'
 
 interface DbUser {
   id: number
@@ -23,12 +24,16 @@ export function findOrCreateUser(
     .prepare('INSERT INTO users (telegram_id, username) VALUES (?, ?)')
     .run(telegramId, username ?? null)
 
-  return {
+  const user = {
     id: result.lastInsertRowid as number,
     telegram_id: telegramId,
     username: username ?? null,
     created_at: new Date().toISOString(),
   }
+
+  seedDefaultProfiles(user.id)
+
+  return user
 }
 
 export function getUserByTelegramId(telegramId: number): DbUser | undefined {

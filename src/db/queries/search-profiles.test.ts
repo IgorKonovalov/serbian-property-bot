@@ -52,8 +52,8 @@ describe('createProfile', () => {
 })
 
 describe('getUserProfiles', () => {
-  it('returns empty array when user has no profiles', () => {
-    expect(getUserProfiles(userId)).toEqual([])
+  it('returns default profiles for a new user', () => {
+    expect(getUserProfiles(userId)).toHaveLength(5)
   })
 
   it('returns profiles ordered by name', () => {
@@ -61,15 +61,18 @@ describe('getUserProfiles', () => {
     createProfile(userId, 'Alpha', 'a')
     createProfile(userId, 'Middle', 'm')
     const profiles = getUserProfiles(userId)
-    expect(profiles.map((p) => p.name)).toEqual(['Alpha', 'Middle', 'Zebra'])
+    const names = profiles.map((p) => p.name)
+    // Custom profiles are mixed in alphabetically with defaults
+    expect(names).toEqual([...names].sort())
   })
 
   it('does not return profiles of other users', () => {
     const otherUser = findOrCreateUser(2, 'other').id
     createProfile(userId, 'Mine', 'x')
     createProfile(otherUser, 'Theirs', 'y')
-    expect(getUserProfiles(userId)).toHaveLength(1)
-    expect(getUserProfiles(otherUser)).toHaveLength(1)
+    // Each user has 5 defaults + 1 custom
+    expect(getUserProfiles(userId)).toHaveLength(6)
+    expect(getUserProfiles(otherUser)).toHaveLength(6)
   })
 })
 
@@ -179,17 +182,15 @@ describe('deleteProfile', () => {
 
 describe('seedDefaultProfiles', () => {
   it('seeds 5 default profiles for a new user', () => {
-    seedDefaultProfiles(userId)
+    // Already seeded by findOrCreateUser
     const profiles = getUserProfiles(userId)
     expect(profiles).toHaveLength(5)
   })
 
-  it('does not seed if user already has profiles', () => {
-    createProfile(userId, 'Existing', 'x')
+  it('does not double-seed if called again', () => {
     seedDefaultProfiles(userId)
     const profiles = getUserProfiles(userId)
-    expect(profiles).toHaveLength(1)
-    expect(profiles[0].name).toBe('Existing')
+    expect(profiles).toHaveLength(5)
   })
 
   it('seeds profiles with correct filter on Porodična kuća', () => {
