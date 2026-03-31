@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf'
+import { Telegraf, Markup } from 'telegraf'
 import type { InlineKeyboardButton, InlineKeyboardMarkup } from 'telegraf/types'
 import { findOrCreateUser } from '../../db/queries/users'
 import {
@@ -23,7 +23,21 @@ function buildFavoritesPage(
   const favorites = getUserFavorites(userId)
 
   if (favorites.length === 0) {
-    return { text: messages.favoritesEmpty, keyboard: undefined }
+    return {
+      text: messages.favoritesEmpty,
+      keyboard: {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: messages.buttonNewSearch,
+                callback_data: 'search_restart',
+              } as InlineKeyboardButton.CallbackButton,
+            ],
+          ],
+        },
+      },
+    }
   }
 
   const totalPages = Math.ceil(favorites.length / FAVORITES_PER_PAGE)
@@ -175,7 +189,11 @@ export function registerFavoritesCommand(bot: Telegraf): void {
     clearAllFavorites(user.id)
     userPages.delete(ctx.from.id)
 
-    await ctx.editMessageText(messages.favoritesCleared)
+    await ctx.editMessageText(messages.favoritesCleared, {
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback(messages.buttonNewSearch, 'search_restart')],
+      ]),
+    })
     await ctx.answerCbQuery()
   })
 

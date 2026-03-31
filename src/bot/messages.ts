@@ -130,6 +130,13 @@ export const messages = {
     '4. Откройте /digest чтобы получить дайджест прямо сейчас\n' +
     '5. Если изменений нет — бот не беспокоит',
 
+  // Navigation
+  buttonMainMenu: '🏠 Меню',
+  buttonNewSearch: '🔍 Новый поиск',
+  buttonCreateProfile: '📋 Создать профиль',
+  buttonRetry: '🔄 Повторить',
+  buttonBackToDigest: '« К дайджесту',
+
   // Settings
   settingsTitle: '⚙️ <b>Настройки</b>',
   settingsSources: '🌐 Источники поиска',

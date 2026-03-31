@@ -143,7 +143,11 @@ export function registerSearchCommand(
     const profiles = getUserProfiles(user.id)
 
     if (profiles.length === 0) {
-      await ctx.reply(messages.searchNoProfiles)
+      await ctx.reply(messages.searchNoProfiles, {
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback(messages.buttonCreateProfile, 'prof_add')],
+        ]),
+      })
       return
     }
 

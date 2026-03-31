@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf'
+import { Telegraf, Markup } from 'telegraf'
 import { config } from '../config'
 import type { ParserRegistry } from '../parsers/registry'
 import { registerStartCommand } from './commands/start'
@@ -22,7 +22,13 @@ export function createBot(registry: ParserRegistry): Telegraf {
 
   bot.catch((err, ctx) => {
     console.error(`Error for ${ctx.updateType}:`, err)
-    ctx.reply('Something went wrong. Please try again.').catch(() => {})
+    ctx
+      .reply('Что-то пошло не так. Попробуйте ещё раз.', {
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('❓ Помощь', 'help_show')],
+        ]),
+      })
+      .catch(() => {})
   })
 
   return bot

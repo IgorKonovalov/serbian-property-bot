@@ -22,7 +22,15 @@ const bot = createBot(registry)
 
 startScheduler(bot, registry)
 
-bot.launch(() => {
+bot.launch(async () => {
+  await bot.telegram.setMyCommands([
+    { command: 'search', description: 'Поиск недвижимости' },
+    { command: 'profiles', description: 'Профили поиска' },
+    { command: 'favorites', description: 'Избранное' },
+    { command: 'digest', description: 'Дайджест — новые и цены' },
+    { command: 'settings', description: 'Настройки' },
+    { command: 'help', description: 'Помощь' },
+  ])
   console.log('Property bot is running')
 })
 
