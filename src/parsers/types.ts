@@ -25,4 +25,5 @@ export interface SearchParams {
 export interface Parser {
   readonly source: string
   search(params: SearchParams): Promise<Listing[]>
+  fetchByUrl?(url: string): Promise<Listing | null>
 }

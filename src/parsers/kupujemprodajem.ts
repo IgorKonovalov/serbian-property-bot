@@ -1,12 +1,9 @@
-import axios from 'axios'
 import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
+import { paginatedSearch, fetchPage } from './base-parser'
 
 const BASE_URL =
   'https://www.kupujemprodajem.com/nekretnine-prodaja/kuce/pretraga'
-
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
 export function buildSearchUrl(params: SearchParams, page: number): string {
   const query = new URLSearchParams()
@@ -122,41 +119,86 @@ export function hasNextPage(html: string, currentPage: number): boolean {
   return nextPageLink.length > 0
 }
 
+export function parseDetailPage(html: string, url: string): Listing | null {
+  const $ = cheerio.load(html)
+
+  const idMatch = url.match(/\/oglas\/(\d+)/)
+  const externalId = idMatch?.[1]
+  if (!externalId) return null
+
+  const title = $('h1').first().text().trim() || ''
+
+  // Try JSON-LD first for structured data
+  let price: number | null = null
+  let size: number | null = null
+  const jsonLd = $('script[type="application/ld+json"]').first().html()
+  if (jsonLd) {
+    try {
+      const data = JSON.parse(jsonLd)
+      if (data.offers?.price) {
+        price = parseInt(data.offers.price, 10)
+        if (isNaN(price)) price = null
+      }
+      if (data.floorSize?.value) {
+        size = parseInt(data.floorSize.value, 10)
+        if (isNaN(size)) size = null
+      }
+    } catch {
+      // Fall through to HTML parsing
+    }
+  }
+
+  // Fallback to HTML parsing
+  if (price === null) {
+    const priceRaw = $('[class*="Price"]').first().text().trim()
+    price = parsePrice(priceRaw)
+  }
+  if (size === null && title) {
+    size = parseSizeFromTitle(title)
+  }
+
+  const locationRaw =
+    $('[class*="LocationBreadcrumbs"]').text().trim() ||
+    $('meta[property="og:locality"]').attr('content') ||
+    ''
+  const { city, area } = parseLocation(locationRaw)
+
+  const imageUrl = $('meta[property="og:image"]').attr('content') ?? null
+  const rooms = title ? parseRoomsFromTitle(title) : null
+
+  return {
+    externalId,
+    source: 'kupujemprodajem',
+    url,
+    title,
+    price,
+    size,
+    plotSize: null,
+    rooms,
+    area,
+    city,
+    imageUrl,
+  }
+}
+
 export class KupujemProdajemParser implements Parser {
   readonly source = 'kupujemprodajem'
 
   async search(params: SearchParams): Promise<Listing[]> {
-    const allListings: Listing[] = []
-    const maxPages = 3
+    return paginatedSearch(
+      {
+        source: this.source,
+        buildUrl: buildSearchUrl,
+        parsePage,
+        hasNextPage,
+      },
+      params
+    )
+  }
 
-    for (let page = 1; page <= maxPages; page++) {
-      const url = buildSearchUrl(params, page)
-      console.log(`[kp] Fetching page ${page}: ${url}`)
-
-      const start = Date.now()
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': USER_AGENT,
-          Accept: 'text/html',
-          'Accept-Language': 'sr-Latn-RS,sr;q=0.9,en;q=0.8',
-        },
-        timeout: 15000,
-      })
-      console.log(
-        `[kp] Page ${page}: HTTP ${response.status} (${Date.now() - start}ms)`
-      )
-
-      const listings = parsePage(response.data)
-      console.log(`[kp] Page ${page}: ${listings.length} listings parsed`)
-      allListings.push(...listings)
-
-      if (!hasNextPage(response.data, page)) break
-
-      if (page < maxPages) {
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
-    }
-
-    return allListings
+  async fetchByUrl(url: string): Promise<Listing | null> {
+    const html = await fetchPage(url, this.source)
+    if (!html) return null
+    return parseDetailPage(html, url)
   }
 }

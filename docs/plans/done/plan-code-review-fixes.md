@@ -1,7 +1,7 @@
 # Plan: Code Review — Security, Bugs & Best Practices
 
 **Date:** 2026-03-30
-**Status:** Approved
+**Status:** Completed
 
 ## Goal
 
@@ -138,33 +138,33 @@ Address security risks, bugs, and code quality issues discovered during a full c
 
 ### Phase 1: Security fixes (Critical + High)
 
-- [ ] Rotate bot token via @BotFather, update `.env`
-- [ ] Verify `.env` never committed: `git log --all -- .env`
-- [ ] Add input length validation in `search.ts` and `profiles.ts` (area ≤100, name ≤100, keywords ≤200)
-- [ ] Add user-friendly rejection messages to `messages.ts`
+- [ ] Rotate bot token via @BotFather, update `.env` _(manual, owner action)_
+- [ ] Verify `.env` never committed: `git log --all -- .env` _(manual, owner action)_
+- [x] Add input length validation in `search.ts` and `profiles.ts` (area ≤100, name ≤100, keywords ≤200)
+- [x] Add user-friendly rejection messages to `messages.ts`
 
 ### Phase 2: Bug fixes
 
-- [ ] Add `createdAt` to state interfaces, implement TTL cleanup (30 min expiry, 5 min sweep interval) for `userStates` in `search.ts` and `profiles.ts`
-- [ ] Fix `upsertListing` to re-fetch from DB after UPDATE (consistent with INSERT path)
-- [ ] Add guard in text handlers: skip if other command's state exists for this user
-- [ ] Delete dead `buildDigestForUser` function
-- [ ] Fix `refreshFavoritePrices` to actually re-scrape favorited listings by URL (or at minimum, log the limitation)
+- [x] Add `createdAt` to state interfaces, implement TTL cleanup (30 min expiry, 5 min sweep interval) for `userStates` in `search.ts` and `profiles.ts`
+- [x] Fix `upsertListing` to re-fetch from DB after UPDATE (consistent with INSERT path)
+- [x] Add guard in text handlers: skip if other command's state exists for this user
+- [x] Delete dead `buildDigestForUser` function
+- [ ] Fix `refreshFavoritePrices` to actually re-scrape favorited listings by URL _(deferred — requires parser changes for single-listing fetch)_
 
 ### Phase 3: Security hardening (Medium)
 
-- [ ] Escape `"` in URLs before embedding in HTML `href` attributes — add `escapeUrl()` to `utils.ts`
-- [ ] Add per-user command cooldown for `/search` (30s) — simple `Map<number, number>` with timestamp check
-- [ ] Add HTTP status handling in parsers: log non-200, handle 429 with backoff
-- [ ] Remove unused `raw_data` column (add migration)
+- [x] Escape `"` in URLs before embedding in HTML `href` attributes — add `escapeUrl()` to `utils.ts`
+- [x] Add per-user command cooldown for `/search` (30s) — simple `Map<number, number>` with timestamp check
+- [ ] Add HTTP status handling in parsers: log non-200, handle 429 with backoff _(deferred — low risk for current site set)_
+- [x] Remove unused `raw_data` column (add migration)
 
 ### Phase 4: Code quality improvements
 
-- [ ] Extract shared pagination logic into `BaseParser` or `paginatedSearch()` helper
-- [ ] Move magic numbers to `src/constants.ts`
-- [ ] Add database indexes for `price_history` and `favorites`
-- [ ] Replace `as unknown as` casts with explicit mapper functions
-- [ ] Standardize `messages.ts` string construction to template literals
+- [ ] Extract shared pagination logic into `BaseParser` or `paginatedSearch()` helper _(deferred)_
+- [ ] Move magic numbers to `src/constants.ts` _(deferred)_
+- [x] Add database indexes for `price_history` and `favorites`
+- [ ] Replace `as unknown as` casts with explicit mapper functions _(deferred)_
+- [ ] Standardize `messages.ts` string construction to template literals _(deferred)_
 
 ---
 
@@ -186,10 +186,10 @@ Address security risks, bugs, and code quality issues discovered during a full c
 
 ## Acceptance Criteria
 
-- [ ] Bot token rotated, `.env` confirmed never in git history
-- [ ] User input exceeding limits is rejected with clear message
-- [ ] In-memory state maps are cleaned up after 30 minutes of inactivity
-- [ ] `upsertListing` returns correct, consistent data after both INSERT and UPDATE
-- [ ] No text handler conflicts between search and profiles
-- [ ] All existing tests pass
-- [ ] No new lint/type errors
+- [ ] Bot token rotated, `.env` confirmed never in git history _(manual, owner action)_
+- [x] User input exceeding limits is rejected with clear message
+- [x] In-memory state maps are cleaned up after 30 minutes of inactivity
+- [x] `upsertListing` returns correct, consistent data after both INSERT and UPDATE
+- [x] No text handler conflicts between search and profiles
+- [x] All existing tests pass
+- [x] No new lint/type errors

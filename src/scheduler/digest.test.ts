@@ -11,11 +11,7 @@ import {
 import type { Listing } from '../parsers/types'
 import type { PriceChange } from '../db/queries/listings'
 import { findOrCreateUser } from '../db/queries/users'
-import {
-  createProfile,
-  getUserProfiles,
-  deleteProfile,
-} from '../db/queries/search-profiles'
+import { createProfile } from '../db/queries/search-profiles'
 import { upsertListing } from '../db/queries/listings'
 import { addFavorite } from '../db/queries/favorites'
 import type { ParserRegistry } from '../parsers/registry'
@@ -171,6 +167,8 @@ describe('buildPriceChangesMessage', () => {
 function makeRegistry(results: Listing[] = []): ParserRegistry {
   return {
     searchCombined: jest.fn().mockResolvedValue(results),
+    fetchByUrl: jest.fn().mockResolvedValue(results[0] ?? null),
+    registeredSources: ['halooglasi'],
   } as unknown as ParserRegistry
 }
 
@@ -257,9 +255,8 @@ describe('sendDigestToAll', () => {
 })
 
 describe('refreshFavoritePrices', () => {
-  it('refreshes prices for users with favorites and active profiles', async () => {
+  it('fetches each favorite by URL', async () => {
     const user = findOrCreateUser(400, 'refresh')
-    createProfile(user.id, 'Test', 'kuća')
     const dbListing = upsertListing(makeListing({ externalId: 'fav-1' }))
     addFavorite(user.id, dbListing.id)
     const registry = makeRegistry([
@@ -267,7 +264,10 @@ describe('refreshFavoritePrices', () => {
     ])
     const bot = makeBotMock()
     await refreshFavoritePrices(bot, registry)
-    expect(registry.searchCombined).toHaveBeenCalled()
+    expect(registry.fetchByUrl).toHaveBeenCalledWith(
+      'https://example.com/1',
+      'halooglasi'
+    )
   })
 
   it('skips users with no favorites', async () => {
@@ -275,33 +275,16 @@ describe('refreshFavoritePrices', () => {
     const registry = makeRegistry()
     const bot = makeBotMock()
     await refreshFavoritePrices(bot, registry)
-    expect(registry.searchCombined).not.toHaveBeenCalled()
+    expect(registry.fetchByUrl).not.toHaveBeenCalled()
   })
 
-  it('skips users with no active profiles', async () => {
-    const user = findOrCreateUser(402, 'noprofile')
-    // Delete all default profiles
-    const profiles = getUserProfiles(user.id)
-    for (const p of profiles) {
-      deleteProfile(p.id, user.id)
-    }
-    const dbListing = upsertListing(
-      makeListing({ externalId: 'fav-noprofile' })
-    )
-    addFavorite(user.id, dbListing.id)
-    const registry = makeRegistry()
-    const bot = makeBotMock()
-    await refreshFavoritePrices(bot, registry)
-    expect(registry.searchCombined).not.toHaveBeenCalled()
-  })
-
-  it('handles registry error gracefully', async () => {
+  it('handles fetchByUrl error gracefully', async () => {
     const user = findOrCreateUser(403, 'err')
-    createProfile(user.id, 'Test', 'kuća')
     const dbListing = upsertListing(makeListing({ externalId: 'fav-err' }))
     addFavorite(user.id, dbListing.id)
     const registry = {
-      searchCombined: jest.fn().mockRejectedValue(new Error('fail')),
+      fetchByUrl: jest.fn().mockRejectedValue(new Error('fail')),
+      registeredSources: ['halooglasi'],
     } as unknown as ParserRegistry
     const bot = makeBotMock()
     // Should not throw

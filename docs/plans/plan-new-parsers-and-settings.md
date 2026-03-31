@@ -1,7 +1,7 @@
 # Plan: New Parsers & Site Settings
 
 **Date:** 2026-03-30
-**Status:** In Progress (Phases 1-2 complete)
+**Status:** Completed (Phases 1-2 done, Phase 3 moved to draft)
 
 ## Goal
 
@@ -176,133 +176,7 @@ registry.register(new KupujemProdajemParser())
 
 Files: `src/index.ts`
 
-### Phase 3: KP login (optional auth)
-
-**3.1 — Why login?**
-
-Login is NOT required for searching, but provides:
-
-- Access to seller contact info
-- Ability to message sellers directly
-- Potentially higher rate limits / less blocking
-- Access to user's KP favorites and saved searches
-
-**3.2 — Credential storage**
-
-Store encrypted KP credentials per user in `user_settings`:
-
-- Key: `kp_session` — stores session cookie(s) after successful login
-- Do NOT store raw username/password — only session tokens
-- Sessions expire — handle gracefully (fall back to anonymous search)
-
-**3.3 — Login flow in bot**
-
-Add KP login option to settings menu:
-
-```
-/settings
-  -> ⚙️ Настройки
-     🌐 Источники поиска
-     🔑 Войти в KupujemProdajem
-     -> User taps "🔑 Войти в KP"
-        -> [Message: instructions]
-           "Для входа в KupujemProdajem:
-            1. Откройте ссылку ниже
-            2. Войдите в аккаунт
-            3. Скопируйте и отправьте мне cookie (инструкция ниже)"
-           [🔗 Открыть KP] (URL button to login page)
-```
-
-**Alternative approach (simpler, recommended):**
-
-Instead of asking users to copy cookies manually, implement a two-step flow:
-
-1. Bot asks for KP email and password via text input (wizard-style, like profile creation)
-2. Bot performs login via HTTP POST to KP's login endpoint
-3. Bot stores resulting session cookies in DB
-4. Bot confirms success/failure
-5. Password is NOT stored — only the session cookie
-
-```
-/settings -> 🔑 Войти в KP
-  -> [Message: "Введите email от KupujemProdajem:"]
-     -> User types email
-        -> [Message: "Введите пароль:"]
-           -> User types password
-              -> Bot attempts login via HTTP
-              -> Success: "✅ Вход выполнен! Сессия сохранена."
-              -> Failure: "❌ Не удалось войти. Проверьте данные."
-     -> ✕ Отмена (cancel at any step)
-```
-
-**Login implementation:**
-
-- POST to KP login endpoint with email/password
-- Extract session cookies from response
-- Store cookies in `user_settings` (key: `kp_session`, value: JSON cookie string)
-- KP parser checks for stored session — if available, includes cookies in requests
-
-**3.4 — Parser with optional auth**
-
-Extend `KupujemProdajemParser` to accept optional session cookies:
-
-```typescript
-export class KupujemProdajemParser implements Parser {
-  async search(params: SearchParams, cookies?: string): Promise<Listing[]> {
-    const headers = { 'User-Agent': USER_AGENT, ... }
-    if (cookies) {
-      headers['Cookie'] = cookies
-    }
-    // ... same parsing logic
-  }
-}
-```
-
-Problem: the `Parser` interface's `search(params)` doesn't support extra args. Options:
-
-**Option A:** Add optional `context` to `SearchParams`:
-
-```typescript
-interface SearchParams {
-  // ... existing fields
-  context?: Record<string, string> // site-specific extras (cookies, tokens)
-}
-```
-
-**Option B:** Pass cookies via parser constructor or a setter:
-
-```typescript
-const kpParser = new KupujemProdajemParser()
-kpParser.setSession(userId, cookies) // per-user session cache
-registry.register(kpParser)
-```
-
-**Decision:** Option B — keeps the Parser interface clean. The parser maintains an internal `Map<userId, string>` for sessions. Before search, the caller sets the session if available. If no session, searches anonymously.
-
-But this requires passing `userId` through the search flow. Currently `searchAll`/`searchCombined` don't know about users.
-
-**Revised approach:** Add optional `userId` to `searchAll`/`searchCombined` (already being modified for site filtering in Phase 1). Parsers that need auth can look up credentials themselves:
-
-```typescript
-interface Parser {
-  readonly source: string
-  search(params: SearchParams): Promise<Listing[]>
-  setUserContext?(userId: number): void // optional, for auth-aware parsers
-}
-```
-
-Registry calls `parser.setUserContext(userId)` before `parser.search()` if the method exists. The KP parser uses this to load session cookies from DB.
-
-Files: `src/parsers/types.ts`, `src/parsers/registry.ts`, `src/parsers/kupujemprodajem.ts`, `src/bot/commands/settings.ts`, `src/db/queries/user-settings.ts`
-
-**3.5 — Session management**
-
-- Sessions may expire — if a request returns a login redirect or 401, clear the stored session
-- Show session status in settings: `🔑 KupujemProdajem: подключено ✅` or `🔑 KupujemProdajem: не подключено`
-- Add a "Выйти" (logout) button to clear stored session
-- Password message should be deleted after processing (bot deletes the user's message containing the password for security via `ctx.deleteMessage(ctx.message.message_id)`)
-
-### Phase 4: Future parsers (not implemented now, just preparation)
+### Phase 3: Future parsers (not implemented now, just preparation)
 
 **4.1 — 4zida.rs (recommended next)**
 
@@ -321,14 +195,13 @@ No code for Phase 4 — just ensure the architecture supports easy addition (it 
 
 ## Technical Decisions
 
-| Decision                 | Choice                                                                  | Rationale                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Settings storage         | Generic key-value `user_settings` table                                 | Flexible for site toggles, KP sessions, future preferences without schema changes           |
-| KP search method         | HTML scraping (cheerio)                                                 | SSR via Next.js, same stack as other parsers, avoids `/api/` which is blocked by robots.txt |
-| KP login approach        | Bot collects email/password, performs HTTP login, stores session cookie | Simpler UX than asking user to copy cookies; password not stored                            |
-| Auth in parser interface | Optional `setUserContext` method                                        | Keeps interface clean for parsers that don't need auth; no breaking changes                 |
-| Site filtering           | `enabledSources` param in registry methods                              | Minimal change to existing architecture; per-user filtering at the caller level             |
-| Next parser after KP     | 4zida.rs                                                                | Highest listing volume (99K+), cheerio-compatible, no login, fills coverage gap             |
+| Decision             | Choice                                     | Rationale                                                                                   |
+| -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Settings storage     | Generic key-value `user_settings` table    | Flexible for site toggles, KP sessions, future preferences without schema changes           |
+| KP search method     | HTML scraping (cheerio)                    | SSR via Next.js, same stack as other parsers, avoids `/api/` which is blocked by robots.txt |
+| KP login             | Deferred to draft                          | Not needed for core functionality; anonymous search works fine                              |
+| Site filtering       | `enabledSources` param in registry methods | Minimal change to existing architecture; per-user filtering at the caller level             |
+| Next parser after KP | 4zida.rs                                   | Highest listing volume (99K+), cheerio-compatible, no login, fills coverage gap             |
 
 ## File Structure
 
@@ -337,8 +210,8 @@ src/
   parsers/
     kupujemprodajem.ts          — NEW: KP parser (cheerio)
     kupujemprodajem.test.ts     — NEW: KP parser tests
-    types.ts                    — add setUserContext to Parser interface
-    registry.ts                 — add enabledSources filtering + setUserContext call
+    types.ts                    — Parser interface (unchanged)
+    registry.ts                 — add enabledSources filtering
   bot/
     commands/
       settings.ts               — NEW: /settings command + site toggles + KP login
@@ -352,11 +225,8 @@ src/
 
 ## Risks & Open Questions
 
-- **Risk:** KP login endpoint may change or add CAPTCHA — **Mitigation:** login is optional; anonymous search always works as fallback
 - **Risk:** KP may block scraping via rate limiting or IP bans — **Mitigation:** 1s delay between pages (same as other parsers), realistic User-Agent, max 3 pages
 - **Risk:** KP HTML structure may differ from research findings — **Mitigation:** implementation phase includes HTML exploration + tests with fixture HTML
-- **Risk:** Storing session cookies in plaintext DB — **Mitigation:** sessions are temporary tokens (not passwords), DB is local/server-only, sessions expire naturally. For extra security, could encrypt with a server-side key
-- **Question:** Should KP login collect email/password in bot chat, or use a web-based OAuth flow? Bot chat is simpler but password is briefly visible in chat history. Bot deletes the password message immediately after reading.
 - **Question:** KP search URL query params need verification during implementation — the research identified the structure but exact param names may differ
 
 ## Acceptance Criteria
@@ -369,10 +239,6 @@ src/
 - [x] KP parser handles pagination (up to 3 pages)
 - [x] KP parser has unit tests with HTML fixtures
 - [x] KP parser registered and included in search results
-- [ ] KP login flow collects credentials and stores session cookie
-- [ ] KP login password message deleted from chat immediately
-- [ ] Settings shows KP connection status (connected/not connected)
-- [ ] KP parser uses session cookies when available, anonymous when not
-- [ ] Expired KP sessions handled gracefully (fall back to anonymous)
+- [ ] ~~KP login~~ — moved to `docs/plans/draft/idea-kp-login.md`
 - [x] Site toggles use `✅`/`◻️` consistent with UX patterns
 - [x] All settings messages in Russian

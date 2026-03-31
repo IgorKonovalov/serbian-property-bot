@@ -1,11 +1,8 @@
-import axios from 'axios'
 import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
+import { paginatedSearch, fetchPage } from './base-parser'
 
 const BASE_URL = 'https://www.nekretnine.rs/stambeni-objekti/kuce'
-
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
 export function cityToSlug(city: string): string {
   return city
@@ -145,43 +142,68 @@ export function hasNextPage(html: string): boolean {
   return $('.offer-body').length >= 20
 }
 
+export function parseDetailPage(html: string, url: string): Listing | null {
+  const $ = cheerio.load(html)
+
+  const idMatch = url.match(/\/([A-Za-z0-9_-]+)\/$/)
+  const externalId = idMatch?.[1]
+  if (!externalId) return null
+
+  const title = $('h1').first().text().trim() || ''
+  const priceRaw =
+    $('.stickyBox__price').first().text().trim() ||
+    $('.detail-price').first().text().trim()
+  const price = parsePrice(priceRaw)
+
+  const sizeRaw =
+    $('.stickyBox__size').first().text().trim() ||
+    $('.detail-size').first().text().trim()
+  const size = parseSize(sizeRaw)
+
+  const locationText = $('.property__location').text().trim()
+  const locationParts = locationText
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const area = locationParts.length > 2 ? locationParts[0] : null
+  const city =
+    locationParts.length > 2 ? locationParts[1] : (locationParts[0] ?? null)
+
+  const imageUrl = $('meta[property="og:image"]').attr('content') ?? null
+
+  return {
+    externalId,
+    source: 'nekretnine',
+    url,
+    title,
+    price,
+    size,
+    plotSize: null,
+    rooms: null,
+    area,
+    city,
+    imageUrl,
+  }
+}
+
 export class NekretnineParser implements Parser {
   readonly source = 'nekretnine'
 
   async search(params: SearchParams): Promise<Listing[]> {
-    const allListings: Listing[] = []
-    const maxPages = 3
+    return paginatedSearch(
+      {
+        source: this.source,
+        buildUrl: buildSearchUrl,
+        parsePage,
+        hasNextPage: (html) => hasNextPage(html),
+      },
+      params
+    )
+  }
 
-    for (let page = 1; page <= maxPages; page++) {
-      const url = buildSearchUrl(params, page)
-      console.log(`[nekretnine] Fetching page ${page}: ${url}`)
-
-      const start = Date.now()
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': USER_AGENT,
-          Accept: 'text/html',
-          'Accept-Language': 'sr-Latn-RS,sr;q=0.9,en;q=0.8',
-        },
-        timeout: 15000,
-      })
-      console.log(
-        `[nekretnine] Page ${page}: HTTP ${response.status} (${Date.now() - start}ms)`
-      )
-
-      const listings = parsePage(response.data)
-      console.log(
-        `[nekretnine] Page ${page}: ${listings.length} listings parsed`
-      )
-      allListings.push(...listings)
-
-      if (!hasNextPage(response.data)) break
-
-      if (page < maxPages) {
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
-    }
-
-    return allListings
+  async fetchByUrl(url: string): Promise<Listing | null> {
+    const html = await fetchPage(url, this.source)
+    if (!html) return null
+    return parseDetailPage(html, url)
   }
 }

@@ -64,6 +64,20 @@ export class ParserRegistry {
     return deduplicated.sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
   }
 
+  async fetchByUrl(url: string, source: string): Promise<Listing | null> {
+    const parser = this.parsers.find((p) => p.source === source)
+    if (!parser?.fetchByUrl) return null
+    try {
+      return await parser.fetchByUrl(url)
+    } catch (error) {
+      console.error(
+        `[registry] fetchByUrl failed for ${source}:`,
+        error instanceof Error ? error.message : error
+      )
+      return null
+    }
+  }
+
   get registeredSources(): string[] {
     return this.parsers.map((p) => p.source)
   }

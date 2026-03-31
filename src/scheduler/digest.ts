@@ -12,6 +12,7 @@ import { getUserFavorites } from '../db/queries/favorites'
 import type { ParserRegistry } from '../parsers/registry'
 import type { Listing, SearchParams } from '../parsers/types'
 import { messages } from '../bot/messages'
+import { escapeUrl } from '../utils'
 
 function formatPriceChange(pc: PriceChange): string {
   const pctChange = ((pc.new_price - pc.old_price) / pc.old_price) * 100
@@ -23,7 +24,7 @@ function formatPriceChange(pc: PriceChange): string {
     `${direction} ${pc.title ?? 'Без названия'}\n` +
     `💰 €${pc.old_price.toLocaleString('ru-RU')} → €${pc.new_price.toLocaleString('ru-RU')} (${sign}${pctChange.toFixed(1)}%)\n` +
     `📍 ${location || 'Н/Д'}\n` +
-    `🔗 <a href="${pc.url}">${pc.source}</a>`
+    `🔗 <a href="${escapeUrl(pc.url)}">${pc.source}</a>`
   )
 }
 
@@ -37,7 +38,7 @@ function formatNewListing(l: Listing, i: number): string {
 
   return (
     `${i + 1}. 🏠 ${rooms}${size} — ${price}\n` +
-    `   📍 ${location || 'Н/Д'} | <a href="${l.url}">${l.source}</a>`
+    `   📍 ${location || 'Н/Д'} | <a href="${escapeUrl(l.url)}">${l.source}</a>`
   )
 }
 
@@ -159,6 +160,8 @@ export async function sendDigestToAll(
   }
 }
 
+const MAX_FAVORITES_PER_REFRESH = 20
+
 export async function refreshFavoritePrices(
   bot: Telegraf,
   registry: ParserRegistry
@@ -166,33 +169,28 @@ export async function refreshFavoritePrices(
   const users = getAllUsers()
 
   for (const user of users) {
-    const favorites = getUserFavorites(user.id)
+    const favorites = getUserFavorites(user.id).slice(
+      0,
+      MAX_FAVORITES_PER_REFRESH
+    )
     if (favorites.length === 0) continue
 
-    const profiles = getUserProfiles(user.id).filter((p) => p.is_active)
-    if (profiles.length === 0) continue
+    console.log(
+      `[digest] Refreshing ${favorites.length} favorites for user ${user.telegram_id}`
+    )
 
-    const paramsList: SearchParams[] = profiles.map((p) => ({
-      keywords: p.keywords,
-      area: '',
-      minPrice: p.min_price ?? undefined,
-      maxPrice: p.max_price ?? undefined,
-      minSize: p.min_size ?? undefined,
-      maxSize: p.max_size ?? undefined,
-      minPlotSize: p.min_plot_size ?? undefined,
-    }))
-
-    try {
-      const enabledSources = getEnabledSites(
-        user.id,
-        registry.registeredSources
-      )
-      const results = await registry.searchCombined(paramsList, enabledSources)
-      for (const listing of results) {
-        upsertListing(listing)
+    for (const fav of favorites) {
+      try {
+        const listing = await registry.fetchByUrl(fav.url, fav.source)
+        if (listing) {
+          upsertListing(listing)
+        }
+      } catch (error) {
+        console.error(
+          `[digest] Failed to refresh favorite ${fav.listing_id}:`,
+          error instanceof Error ? error.message : error
+        )
       }
-    } catch (error) {
-      console.error('Failed to refresh prices:', error)
     }
   }
 }

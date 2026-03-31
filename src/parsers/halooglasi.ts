@@ -1,11 +1,8 @@
-import axios from 'axios'
 import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
+import { paginatedSearch, fetchPage } from './base-parser'
 
 const BASE_URL = 'https://www.halooglasi.com/nekretnine/prodaja-kuca'
-
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
 export function buildSearchUrl(params: SearchParams, page: number): string {
   const query = new URLSearchParams()
@@ -113,50 +110,76 @@ export function parsePage(html: string): Listing[] {
   return listings
 }
 
-function hasNextPage(html: string, currentPage: number): boolean {
+export function hasNextPage(html: string, currentPage: number): boolean {
   const $ = cheerio.load(html)
   const nextLink = $(`.pagination a[href*="page=${currentPage + 1}"]`)
   return nextLink.length > 0
+}
+
+export function parseDetailPage(html: string, url: string): Listing | null {
+  const $ = cheerio.load(html)
+
+  const externalId =
+    url.match(/\/(\d+)(?:\?|$)/)?.[1] ??
+    $('meta[property="og:url"]')
+      .attr('content')
+      ?.match(/\/(\d+)/)?.[1]
+  if (!externalId) return null
+
+  const title = $('h1.detail-title').text().trim() || ''
+  const priceRaw =
+    $('.central-feature__price .central-feature__value').text().trim() ||
+    $('[data-field-name="cena_d"]').text().trim()
+  const price = parsePrice(priceRaw)
+
+  const locationParts = $('.product-location .product-location-value')
+    .map(function () {
+      return $(this).text().trim()
+    })
+    .get()
+    .filter(Boolean)
+  const city = locationParts[0] ?? null
+  const area = locationParts.slice(1).join(', ') || null
+
+  const imageUrl = $('meta[property="og:image"]').attr('content') ?? null
+
+  const featuresText = $('.detail-features-list').text()
+  const size = parseSize(featuresText)
+  const rooms = parseRooms(featuresText)
+
+  return {
+    externalId,
+    source: 'halooglasi',
+    url,
+    title,
+    price,
+    size,
+    plotSize: null,
+    rooms,
+    area,
+    city,
+    imageUrl,
+  }
 }
 
 export class HalooglasiParser implements Parser {
   readonly source = 'halooglasi'
 
   async search(params: SearchParams): Promise<Listing[]> {
-    const allListings: Listing[] = []
-    const maxPages = 3 // limit to avoid excessive requests
+    return paginatedSearch(
+      {
+        source: this.source,
+        buildUrl: buildSearchUrl,
+        parsePage,
+        hasNextPage,
+      },
+      params
+    )
+  }
 
-    for (let page = 1; page <= maxPages; page++) {
-      const url = buildSearchUrl(params, page)
-      console.log(`[halooglasi] Fetching page ${page}: ${url}`)
-
-      const start = Date.now()
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': USER_AGENT,
-          Accept: 'text/html',
-          'Accept-Language': 'sr-Latn-RS,sr;q=0.9,en;q=0.8',
-        },
-        timeout: 15000,
-      })
-      console.log(
-        `[halooglasi] Page ${page}: HTTP ${response.status} (${Date.now() - start}ms)`
-      )
-
-      const listings = parsePage(response.data)
-      console.log(
-        `[halooglasi] Page ${page}: ${listings.length} listings parsed`
-      )
-      allListings.push(...listings)
-
-      if (!hasNextPage(response.data, page)) break
-
-      // Delay between pages to be polite
-      if (page < maxPages) {
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
-    }
-
-    return allListings
+  async fetchByUrl(url: string): Promise<Listing | null> {
+    const html = await fetchPage(url, this.source)
+    if (!html) return null
+    return parseDetailPage(html, url)
   }
 }
