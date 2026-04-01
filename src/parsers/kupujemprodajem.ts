@@ -1,6 +1,11 @@
 import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
 import { paginatedSearch, fetchPage } from './base-parser'
+import {
+  parsePrice as sharedParsePrice,
+  parseSize as sharedParseSize,
+  parseRooms as sharedParseRooms,
+} from './parse-helpers'
 
 const BASE_URL =
   'https://www.kupujemprodajem.com/nekretnine-prodaja/kuce/pretraga'
@@ -26,27 +31,9 @@ export function buildSearchUrl(params: SearchParams, page: number): string {
   return `${BASE_URL}?${query.toString()}`
 }
 
-export function parsePrice(raw: string | undefined): number | null {
-  if (!raw) return null
-  // Format: "21.000 €" or "295.000 €" (dot as thousands separator)
-  const cleaned = raw.replace(/\./g, '').replace(/[^\d]/g, '')
-  const num = parseInt(cleaned, 10)
-  return isNaN(num) ? null : num
-}
-
-export function parseRoomsFromTitle(title: string): number | null {
-  // Pattern: "4.0 četvorosobna" or "2.0 dvosobna" or "5+ petosobna"
-  const match = title.match(/([\d.]+)\+?\s*(?:[a-zčćšžđ]*sobna)/i)
-  if (!match) return null
-  const num = parseFloat(match[1])
-  return isNaN(num) ? null : num
-}
-
-export function parseSizeFromTitle(title: string): number | null {
-  // Pattern: "80 m²" or "131m2"
-  const match = title.match(/(\d+)\s*m[²2]/i)
-  return match ? parseInt(match[1], 10) : null
-}
+export const parsePrice = sharedParsePrice
+export const parseRoomsFromTitle = sharedParseRooms
+export const parseSizeFromTitle = sharedParseSize
 
 export function parseLocation(raw: string): {
   city: string | null
@@ -143,8 +130,11 @@ export function parseDetailPage(html: string, url: string): Listing | null {
         size = parseInt(data.floorSize.value, 10)
         if (isNaN(size)) size = null
       }
-    } catch {
-      // Fall through to HTML parsing
+    } catch (error) {
+      // JSON-LD parsing failed, fall through to HTML parsing
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn(`[kp] JSON-LD parse failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 

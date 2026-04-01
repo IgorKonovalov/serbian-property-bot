@@ -8,9 +8,15 @@ import { registerFavoritesCommand } from './commands/favorites'
 import { registerDigestCommand } from './commands/digest'
 import { registerHelpCommand } from './commands/help'
 import { registerSettingsCommand } from './commands/settings'
+import { createLogger } from '../logger'
+import { rateLimiter } from './rate-limiter'
+
+const log = createLogger('bot')
 
 export function createBot(registry: ParserRegistry): Telegraf {
   const bot = new Telegraf(config.botToken)
+
+  bot.use(rateLimiter())
 
   registerStartCommand(bot)
   registerSearchCommand(bot, registry)
@@ -21,7 +27,10 @@ export function createBot(registry: ParserRegistry): Telegraf {
   registerHelpCommand(bot)
 
   bot.catch((err, ctx) => {
-    console.error(`Error for ${ctx.updateType}:`, err)
+    log.error('Unhandled error', {
+      updateType: ctx.updateType,
+      error: err instanceof Error ? err.message : String(err),
+    })
     ctx
       .reply('Что-то пошло не так. Попробуйте ещё раз.', {
         ...Markup.inlineKeyboard([

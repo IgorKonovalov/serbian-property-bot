@@ -102,6 +102,20 @@ export function initDatabase(dbPath: string): Database.Database {
       ON favorites(user_id);
   `)
 
+  // Data retention: remove old price history entries
+  const retentionDays =
+    parseInt(process.env['PRICE_HISTORY_RETENTION_DAYS'] ?? '', 10) || 90
+  const deleted = db
+    .prepare(
+      `DELETE FROM price_history WHERE recorded_at < datetime('now', '-' || ? || ' days')`
+    )
+    .run(retentionDays)
+  if (deleted.changes > 0) {
+    console.log(
+      `Cleaned up ${deleted.changes} price_history rows older than ${retentionDays} days`
+    )
+  }
+
   return db
 }
 

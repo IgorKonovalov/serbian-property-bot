@@ -1,6 +1,11 @@
 import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
 import { paginatedSearch, fetchPage } from './base-parser'
+import {
+  parsePrice as sharedParsePrice,
+  parseSize as sharedParseSize,
+  parseRooms as sharedParseRooms,
+} from './parse-helpers'
 
 const BASE_URL = 'https://www.halooglasi.com/nekretnine/prodaja-kuca'
 
@@ -22,25 +27,9 @@ export function buildSearchUrl(params: SearchParams, page: number): string {
   return `${BASE_URL}?${query.toString()}`
 }
 
-export function parsePrice(raw: string | undefined): number | null {
-  if (!raw) return null
-  // Format: "449.000" (dot as thousands separator)
-  const cleaned = raw.replace(/\./g, '').replace(/,/g, '').trim()
-  const num = parseInt(cleaned, 10)
-  return isNaN(num) ? null : num
-}
-
-export function parseSize(featureText: string): number | null {
-  const match = featureText.match(/(\d+)\s*m2/i)
-  return match ? parseInt(match[1], 10) : null
-}
-
-export function parseRooms(featureText: string): number | null {
-  const match = featureText.match(/([\d.]+)\s*Broj soba/i)
-  if (!match) return null
-  const num = parseFloat(match[1])
-  return isNaN(num) ? null : num
-}
+export const parsePrice = sharedParsePrice
+export const parseSize = sharedParseSize
+export const parseRooms = sharedParseRooms
 
 export function parsePage(html: string): Listing[] {
   const $ = cheerio.load(html)

@@ -105,8 +105,11 @@ export function parseJsonLd(html: string): Listing[] {
           imageUrl: getImageUrl(item.image),
         })
       }
-    } catch {
-      // malformed JSON-LD, skip
+    } catch (error) {
+      // malformed JSON-LD, skip — log for monitoring
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn(`[4zida] Malformed JSON-LD: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   })
 
@@ -210,8 +213,11 @@ export function parseDetailPage(html: string, url: string): Listing | null {
             ? data.image
             : (data.image?.url ?? null)
       }
-    } catch {
-      // skip
+    } catch (error) {
+      // malformed JSON-LD in detail page, skip
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn(`[4zida] Malformed detail JSON-LD: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   })
 

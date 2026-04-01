@@ -8,9 +8,12 @@ import { KupujemProdajemParser } from './parsers/kupujemprodajem'
 import { FourZidaParser } from './parsers/4zida'
 import { OglasiParser } from './parsers/oglasi'
 import { startScheduler } from './scheduler/cron'
+import { createLogger } from './logger'
+
+const log = createLogger('main')
 
 const db = initDatabase(config.dbPath)
-console.log(`Database initialized at ${config.dbPath}`)
+log.info('Database initialized', { path: config.dbPath })
 
 const registry = new ParserRegistry()
 registry.register(new HalooglasiParser())
@@ -18,9 +21,10 @@ registry.register(new NekretnineParser())
 registry.register(new KupujemProdajemParser())
 registry.register(new FourZidaParser())
 registry.register(new OglasiParser())
-console.log(
-  `Parser registry ready (${registry.registeredSources.length} sources: ${registry.registeredSources.join(', ')})`
-)
+log.info('Parser registry ready', {
+  count: registry.registeredSources.length,
+  sources: registry.registeredSources,
+})
 
 const bot = createBot(registry)
 
@@ -36,7 +40,7 @@ bot.launch(async () => {
     { command: 'settings', description: 'Настройки' },
     { command: 'help', description: 'Помощь' },
   ])
-  console.log('Property bot is running')
+  log.info('Property bot is running')
 })
 
 process.once('SIGINT', () => {

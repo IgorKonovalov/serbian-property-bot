@@ -8,10 +8,12 @@ import {
 } from '../../db/queries/favorites'
 import { messages } from '../messages'
 import { escapeHtml } from '../../utils'
+import { TTLMap } from '../state-manager'
+import { config } from '../../config'
 
-const FAVORITES_PER_PAGE = 5
+const FAVORITES_PER_PAGE = config.favoritesPerPage
 
-const userPages = new Map<number, number>()
+const userPages = new TTLMap<number, number>(30 * 60 * 1000)
 
 function buildFavoritesPage(
   userId: number,

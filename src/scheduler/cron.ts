@@ -2,23 +2,31 @@ import cron from 'node-cron'
 import type { Telegraf } from 'telegraf'
 import type { ParserRegistry } from '../parsers/registry'
 import { refreshFavoritePrices, sendDigestToAll } from './digest'
+import { createLogger } from '../logger'
+import { config } from '../config'
+
+const log = createLogger('scheduler')
 
 export function startScheduler(bot: Telegraf, registry: ParserRegistry): void {
-  // 08:00 Belgrade time (CET/CEST depending on season)
   cron.schedule(
-    '0 8 * * *',
+    config.digestCron,
     async () => {
-      console.log('Running morning digest...')
+      log.info('Running morning digest')
       try {
         await refreshFavoritePrices(bot, registry)
         await sendDigestToAll(bot, registry)
-        console.log('Morning digest complete')
+        log.info('Morning digest complete')
       } catch (error) {
-        console.error('Morning digest failed:', error)
+        log.error('Morning digest failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     },
-    { timezone: 'Europe/Belgrade' }
+    { timezone: config.digestTimezone }
   )
 
-  console.log('Scheduler started: digest at 08:00 CET')
+  log.info('Scheduler started', {
+    cron: config.digestCron,
+    timezone: config.digestTimezone,
+  })
 }

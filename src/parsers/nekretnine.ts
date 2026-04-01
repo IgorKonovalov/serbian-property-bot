@@ -2,6 +2,10 @@ import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
 import { paginatedSearch, fetchPage } from './base-parser'
 import { cityToSlug } from './utils'
+import {
+  parsePrice as sharedParsePrice,
+  parseSize as sharedParseSize,
+} from './parse-helpers'
 
 export { cityToSlug }
 
@@ -35,20 +39,8 @@ export function buildSearchUrl(params: SearchParams, page: number): string {
   return segments.join('/') + '/'
 }
 
-export function parsePrice(text: string | undefined): number | null {
-  if (!text) return null
-  const cleaned = text.replace(/[^\d]/g, '')
-  const num = parseInt(cleaned, 10)
-  return isNaN(num) ? null : num
-}
-
-export function parseSize(text: string | undefined): number | null {
-  if (!text) return null
-  const match = text.match(/([\d,.]+)\s*m²/i)
-  if (!match) return null
-  const num = parseFloat(match[1].replace(',', '.'))
-  return isNaN(num) ? null : Math.round(num)
-}
+export const parsePrice = sharedParsePrice
+export const parseSize = sharedParseSize
 
 export function parsePage(html: string): Listing[] {
   const $ = cheerio.load(html)

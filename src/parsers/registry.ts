@@ -1,4 +1,7 @@
 import type { Listing, Parser, SearchParams } from './types'
+import { createLogger } from '../logger'
+
+const log = createLogger('registry')
 
 export class ParserRegistry {
   private parsers: Parser[] = []
@@ -20,11 +23,13 @@ export class ParserRegistry {
           .map((p) => p.source)
       : []
     if (skipped.length > 0) {
-      console.log(`[registry] Skipped disabled sources: ${skipped.join(', ')}`)
+      log.info('Skipped disabled sources', { sources: skipped })
     }
-    console.log(
-      `[registry] Searching ${parsers.map((p) => p.source).join(', ')} | keywords="${params.keywords}" area="${params.area}"`
-    )
+    log.info('Searching', {
+      sources: parsers.map((p) => p.source),
+      keywords: params.keywords,
+      area: params.area,
+    })
     const settled = await Promise.allSettled(
       parsers.map((p) => p.search(params))
     )
@@ -33,10 +38,10 @@ export class ParserRegistry {
       const result = settled[i]
       const source = parsers[i]?.source ?? 'unknown'
       if (result.status === 'fulfilled') {
-        console.log(`[registry] ${source}: ${result.value.length} listings`)
+        log.info(`${source}: ${result.value.length} listings`)
         results.push(...result.value)
       } else {
-        console.error(`[registry] ${source} FAILED:`, result.reason?.message)
+        log.error(`${source} failed`, { error: result.reason?.message })
       }
     }
     return results.sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
@@ -70,10 +75,10 @@ export class ParserRegistry {
     try {
       return await parser.fetchByUrl(url)
     } catch (error) {
-      console.error(
-        `[registry] fetchByUrl failed for ${source}:`,
-        error instanceof Error ? error.message : error
-      )
+      log.error('fetchByUrl failed', {
+        source,
+        error: error instanceof Error ? error.message : String(error),
+      })
       return null
     }
   }

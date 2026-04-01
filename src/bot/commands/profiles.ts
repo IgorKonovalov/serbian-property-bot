@@ -10,6 +10,7 @@ import {
 import { startSearchWithProfiles, hasActiveSearchState } from './search'
 import { messages } from '../messages'
 import { escapeHtml } from '../../utils'
+import { TTLMap } from '../state-manager'
 
 interface ProfileState {
   action:
@@ -25,21 +26,12 @@ interface ProfileState {
   keywords?: string
 }
 
-const userStates = new Map<number, ProfileState>()
+const PROFILE_STATE_TTL = 30 * 60 * 1000
+const userStates = new TTLMap<number, ProfileState>(PROFILE_STATE_TTL)
 
 export function hasActiveProfileState(telegramId: number): boolean {
   return userStates.has(telegramId)
 }
-
-// Evict stale profile states every 5 minutes
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, state] of userStates) {
-    if (now - state.createdAt > 30 * 60 * 1000) {
-      userStates.delete(key)
-    }
-  }
-}, 5 * 60 * 1000)
 
 function buildProfileListKeyboard(
   userId: number
@@ -52,6 +44,15 @@ function buildProfileListKeyboard(
   buttons.push([Markup.button.callback(messages.profilesAdd, 'prof_add')])
 
   return Markup.inlineKeyboard(buttons)
+}
+
+const MAX_PRICE = 100_000_000
+const MAX_SIZE = 100_000
+const MAX_PLOT_SIZE = 100_000
+
+function clampInt(value: number, max: number): number | undefined {
+  if (isNaN(value) || value < 0 || value > max) return undefined
+  return value
 }
 
 function parseFilters(text: string): {
@@ -68,17 +69,17 @@ function parseFilters(text: string): {
 
   if (parts[0]) {
     const [from, to] = parts[0].split('-').map((s) => parseInt(s.trim(), 10))
-    if (!isNaN(from)) result.minPrice = from
-    if (!isNaN(to)) result.maxPrice = to
+    result.minPrice = clampInt(from, MAX_PRICE)
+    result.maxPrice = clampInt(to, MAX_PRICE)
   }
   if (parts[1]) {
     const [from, to] = parts[1].split('-').map((s) => parseInt(s.trim(), 10))
-    if (!isNaN(from)) result.minSize = from
-    if (!isNaN(to)) result.maxSize = to
+    result.minSize = clampInt(from, MAX_SIZE)
+    result.maxSize = clampInt(to, MAX_SIZE)
   }
   if (parts[2]) {
     const val = parseInt(parts[2].trim(), 10)
-    if (!isNaN(val)) result.minPlotSize = val
+    result.minPlotSize = clampInt(val, MAX_PLOT_SIZE)
   }
 
   return result

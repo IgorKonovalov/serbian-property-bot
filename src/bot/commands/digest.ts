@@ -9,8 +9,12 @@ import {
   type DigestData,
 } from '../../scheduler/digest'
 import { messages } from '../messages'
+import { TTLMap } from '../state-manager'
+import { createLogger } from '../../logger'
 
-const userDigestCache = new Map<number, DigestData>()
+const log = createLogger('digest-cmd')
+
+const userDigestCache = new TTLMap<number, DigestData>(60 * 60 * 1000)
 
 export function registerDigestCommand(
   bot: Telegraf,
@@ -44,7 +48,9 @@ export function registerDigestCommand(
         })
       }
     } catch (error) {
-      console.error('Digest command failed:', error)
+      log.error('Digest command failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       await ctx.reply(messages.digestFailed, {
         ...Markup.inlineKeyboard([
           [Markup.button.callback(messages.buttonRetry, 'digest_retry')],
@@ -131,7 +137,9 @@ export function registerDigestCommand(
         })
       }
     } catch (error) {
-      console.error('Digest retry failed:', error)
+      log.error('Digest retry failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       await ctx.reply(messages.digestFailed, {
         ...Markup.inlineKeyboard([
           [Markup.button.callback(messages.buttonRetry, 'digest_retry')],

@@ -12,6 +12,11 @@ import type { ParserRegistry } from '../../parsers/registry'
 import type { Listing, SearchParams } from '../../parsers/types'
 import { messages } from '../messages'
 import { hasActiveProfileState } from './profiles'
+import { TTLMap } from '../state-manager'
+import { createLogger } from '../../logger'
+import { config } from '../../config'
+
+const log = createLogger('search')
 
 interface SearchResult extends Listing {
   dbId: number
@@ -38,26 +43,16 @@ interface SearchState {
   createdAt: number
 }
 
-const RESULTS_PER_PAGE = 5
-const STATE_TTL_MS = 30 * 60 * 1000 // 30 minutes
-const SEARCH_COOLDOWN_MS = 30 * 1000 // 30 seconds
+const RESULTS_PER_PAGE = config.resultsPerPage
+const STATE_TTL_MS = config.sessionTtlMs
+const SEARCH_COOLDOWN_MS = config.searchCooldownMs
 
-const userStates = new Map<number, SearchState>()
-const lastSearchTime = new Map<number, number>()
+const userStates = new TTLMap<number, SearchState>(STATE_TTL_MS)
+const lastSearchTime = new TTLMap<number, number>(24 * 60 * 60 * 1000, 60 * 60 * 1000)
 
 export function hasActiveSearchState(telegramId: number): boolean {
   return userStates.has(telegramId)
 }
-
-// Evict stale search states every 5 minutes
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, state] of userStates) {
-    if (now - state.createdAt > STATE_TTL_MS) {
-      userStates.delete(key)
-    }
-  }
-}, 5 * 60 * 1000)
 
 export function startSearchWithProfiles(
   telegramId: number,
@@ -217,20 +212,26 @@ async function runSearch(
   const profileNames = state.profiles
     .filter((p) => state.selectedProfileIds.has(p.id))
     .map((p) => p.name)
-  console.log(
-    `[search] User ${telegramId} | area="${area}" | price=${state.minPrice ?? '?'}-${state.maxPrice ?? '?'} | sort=${state.sortOrder} | profiles: ${profileNames.join(', ')}`
-  )
+  log.info('Search started', {
+    userId: telegramId,
+    area,
+    minPrice: state.minPrice,
+    maxPrice: state.maxPrice,
+    sort: state.sortOrder,
+    profiles: profileNames,
+  })
   await ctx.reply(messages.searchSearching)
 
   try {
     const user = findOrCreateUser(telegramId, ctx.from.username)
     const enabledSources = getEnabledSites(user.id, registry.registeredSources)
-    console.log(`[search] Enabled sources: ${enabledSources.join(', ')}`)
+    log.info('Enabled sources', { sources: enabledSources })
     const startTime = Date.now()
     const rawResults = await registry.searchCombined(paramsList, enabledSources)
-    console.log(
-      `[search] Done: ${rawResults.length} total results (${Date.now() - startTime}ms)`
-    )
+    log.info('Search complete', {
+      results: rawResults.length,
+      durationMs: Date.now() - startTime,
+    })
 
     const results: SearchResult[] = rawResults.map((listing) => {
       const dbListing = upsertListing(listing)
@@ -262,7 +263,9 @@ async function runSearch(
       parse_mode: 'HTML',
     })
   } catch (error) {
-    console.error('Search failed:', error)
+    log.error('Search failed', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     await ctx.reply(messages.searchFailed)
     userStates.delete(telegramId)
   }
@@ -364,12 +367,25 @@ export function registerSearchCommand(
     // Phase: entering price range
     if (state.phase === 'entering_price') {
       const text = ctx.message.text.trim()
+      const MAX_PRICE = 100_000_000
       if (text !== '-') {
         const match = text.match(/^(\d+)?\s*[-–—]\s*(\d+)?$|^(\d+)$/)
         if (match) {
           const min = match[1] ? parseInt(match[1], 10) : undefined
           const max = match[2] ? parseInt(match[2], 10) : undefined
           const single = match[3] ? parseInt(match[3], 10) : undefined
+          if (
+            (min !== undefined && min > MAX_PRICE) ||
+            (max !== undefined && max > MAX_PRICE) ||
+            (single !== undefined && single > MAX_PRICE)
+          ) {
+            await ctx.reply(messages.searchPriceInvalid)
+            return
+          }
+          if (min !== undefined && max !== undefined && min > max) {
+            await ctx.reply(messages.searchPriceInvalid)
+            return
+          }
           if (single) {
             state.maxPrice = single
           } else {
@@ -508,8 +524,10 @@ export function registerSearchCommand(
           reply_markup: keyboard,
         })
       }
-    } catch {
-      // Fallback to text if photo fails
+    } catch (error) {
+      log.warn('Photo upload failed, falling back to text', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       await ctx.reply(caption, {
         parse_mode: 'HTML',
         reply_markup: keyboard,
@@ -525,21 +543,24 @@ export function registerSearchCommand(
     const user = findOrCreateUser(telegramId, ctx.from.username)
     const dbId = parseInt(ctx.match[1], 10)
 
-    addFavorite(user.id, dbId)
-
+    // Verify listing belongs to user's current search results
     const state = userStates.get(telegramId)
-    if (state) {
-      state.savedIds.add(dbId)
-      // Update keyboard to show "Saved" button
-      if (state.results) {
-        try {
-          await ctx.editMessageReplyMarkup(
-            buildResultsKeyboard(state.results, state.page, state.savedIds)
-              .reply_markup
-          )
-        } catch {
-          // May fail if this is a detail view (photo message) — that's ok
-        }
+    if (!state?.results?.some((r) => r.dbId === dbId)) {
+      await ctx.answerCbQuery(messages.searchSessionExpired)
+      return
+    }
+
+    addFavorite(user.id, dbId)
+    state.savedIds.add(dbId)
+    // Update keyboard to show "Saved" button
+    if (state.results) {
+      try {
+        await ctx.editMessageReplyMarkup(
+          buildResultsKeyboard(state.results, state.page, state.savedIds)
+            .reply_markup
+        )
+      } catch {
+        // May fail if this is a detail view (photo message) — that's ok
       }
     }
 

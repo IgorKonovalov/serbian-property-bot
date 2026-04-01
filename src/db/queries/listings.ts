@@ -21,70 +21,76 @@ interface DbListing {
 export function upsertListing(listing: Listing): DbListing {
   const db = getDatabase()
 
-  const existing = db
-    .prepare('SELECT * FROM listings WHERE source = ? AND external_id = ?')
-    .get(listing.source, listing.externalId) as DbListing | undefined
+  const upsert = db.transaction(() => {
+    const existing = db
+      .prepare('SELECT * FROM listings WHERE source = ? AND external_id = ?')
+      .get(listing.source, listing.externalId) as DbListing | undefined
 
-  if (existing) {
-    db.prepare(
-      `UPDATE listings
-       SET title = ?, price = ?, size = ?, plot_size = ?, rooms = ?,
-           area = ?, city = ?, image_url = ?, url = ?, last_seen_at = datetime('now')
-       WHERE id = ?`
-    ).run(
-      listing.title,
-      listing.price,
-      listing.size,
-      listing.plotSize,
-      listing.rooms,
-      listing.area,
-      listing.city,
-      listing.imageUrl,
-      listing.url,
-      existing.id
-    )
+    if (existing) {
+      db.prepare(
+        `UPDATE listings
+         SET title = ?, price = ?, size = ?, plot_size = ?, rooms = ?,
+             area = ?, city = ?, image_url = ?, url = ?, last_seen_at = datetime('now')
+         WHERE id = ?`
+      ).run(
+        listing.title,
+        listing.price,
+        listing.size,
+        listing.plotSize,
+        listing.rooms,
+        listing.area,
+        listing.city,
+        listing.imageUrl,
+        listing.url,
+        existing.id
+      )
 
-    // Record price change
-    if (listing.price !== null && listing.price !== existing.price) {
+      // Record price change
+      if (listing.price !== null && listing.price !== existing.price) {
+        db.prepare(
+          'INSERT INTO price_history (listing_id, price) VALUES (?, ?)'
+        ).run(existing.id, listing.price)
+      }
+
+      return db
+        .prepare('SELECT * FROM listings WHERE id = ?')
+        .get(existing.id) as DbListing
+    }
+
+    const result = db
+      .prepare(
+        `INSERT INTO listings (external_id, source, url, title, price, size, plot_size, rooms, area, city, image_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        listing.externalId,
+        listing.source,
+        listing.url,
+        listing.title,
+        listing.price,
+        listing.size,
+        listing.plotSize,
+        listing.rooms,
+        listing.area,
+        listing.city,
+        listing.imageUrl
+      )
+
+    const id = result.lastInsertRowid as number
+
+    // Record initial price
+    if (listing.price !== null) {
       db.prepare(
         'INSERT INTO price_history (listing_id, price) VALUES (?, ?)'
-      ).run(existing.id, listing.price)
+      ).run(id, listing.price)
     }
 
     return db
       .prepare('SELECT * FROM listings WHERE id = ?')
-      .get(existing.id) as DbListing
-  }
+      .get(id) as DbListing
+  })
 
-  const result = db
-    .prepare(
-      `INSERT INTO listings (external_id, source, url, title, price, size, plot_size, rooms, area, city, image_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      listing.externalId,
-      listing.source,
-      listing.url,
-      listing.title,
-      listing.price,
-      listing.size,
-      listing.plotSize,
-      listing.rooms,
-      listing.area,
-      listing.city,
-      listing.imageUrl
-    )
-
-  const id = result.lastInsertRowid as number
-
-  // Record initial price
-  if (listing.price !== null) {
-    db.prepare(
-      'INSERT INTO price_history (listing_id, price) VALUES (?, ?)'
-    ).run(id, listing.price)
-  }
-
-  return db.prepare('SELECT * FROM listings WHERE id = ?').get(id) as DbListing
+  return upsert()
 }
 
 export function getListingById(id: number): DbListing | undefined {

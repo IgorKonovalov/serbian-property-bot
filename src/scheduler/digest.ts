@@ -13,6 +13,9 @@ import type { ParserRegistry } from '../parsers/registry'
 import type { Listing, SearchParams } from '../parsers/types'
 import { messages } from '../bot/messages'
 import { escapeUrl } from '../utils'
+import { createLogger } from '../logger'
+
+const log = createLogger('digest')
 
 function formatPriceChange(pc: PriceChange): string {
   const pctChange = ((pc.new_price - pc.old_price) / pc.old_price) * 100
@@ -77,7 +80,9 @@ export async function buildDigestData(
 
       newListings = results
     } catch (error) {
-      console.error('Digest scrape failed:', error)
+      log.error('Digest scrape failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -148,14 +153,15 @@ export async function sendDigestToAll(
           parse_mode: 'HTML',
           reply_markup: summary.keyboard,
         })
-        console.log(`Digest sent to user ${user.telegram_id}`)
+        log.info('Digest sent', { telegramId: user.telegram_id })
       } else {
-        console.log(
-          `No digest for user ${user.telegram_id} (nothing to report)`
-        )
+        log.info('No digest to send', { telegramId: user.telegram_id })
       }
     } catch (error) {
-      console.error(`Failed to send digest to user ${user.telegram_id}:`, error)
+      log.error('Failed to send digest', {
+        telegramId: user.telegram_id,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 }
@@ -175,9 +181,10 @@ export async function refreshFavoritePrices(
     )
     if (favorites.length === 0) continue
 
-    console.log(
-      `[digest] Refreshing ${favorites.length} favorites for user ${user.telegram_id}`
-    )
+    log.info('Refreshing favorites', {
+      telegramId: user.telegram_id,
+      count: favorites.length,
+    })
 
     for (const fav of favorites) {
       try {
@@ -186,10 +193,10 @@ export async function refreshFavoritePrices(
           upsertListing(listing)
         }
       } catch (error) {
-        console.error(
-          `[digest] Failed to refresh favorite ${fav.listing_id}:`,
-          error instanceof Error ? error.message : error
-        )
+        log.error('Failed to refresh favorite', {
+          listingId: fav.listing_id,
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     }
   }

@@ -1,9 +1,11 @@
 import axios from 'axios'
 import type { Listing, SearchParams } from './types'
+import { createLogger } from '../logger'
+import { config } from '../config'
 
-export const MAX_PAGES = 3
-export const REQUEST_TIMEOUT = 15000
-export const PAGE_DELAY = 1000
+export const MAX_PAGES = config.maxParserPages
+export const REQUEST_TIMEOUT = config.requestTimeoutMs
+export const PAGE_DELAY = config.pageDelayMs
 
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
@@ -22,22 +24,24 @@ export async function fetchPage(
     const response = await axios.get(url, {
       headers: DEFAULT_HEADERS,
       timeout: REQUEST_TIMEOUT,
+      maxContentLength: 10 * 1024 * 1024,
+      maxBodyLength: 10 * 1024 * 1024,
     })
     if (response.status !== 200) {
-      console.warn(`[${source}] fetchPage: HTTP ${response.status} for ${url}`)
+      const log = createLogger(source)
+      log.warn('fetchPage: unexpected status', { status: response.status, url })
       return null
     }
     return response.data
   } catch (error) {
+    const log = createLogger(source)
     if (axios.isAxiosError(error) && error.response) {
-      console.warn(
-        `[${source}] fetchPage: HTTP ${error.response.status} for ${url}`
-      )
+      log.warn('fetchPage: HTTP error', { status: error.response.status, url })
     } else {
-      console.error(
-        `[${source}] fetchPage failed:`,
-        error instanceof Error ? error.message : error
-      )
+      log.error('fetchPage failed', {
+        url,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
     return null
   }
@@ -54,11 +58,12 @@ export async function paginatedSearch(
   config: PaginatedSearchConfig,
   params: SearchParams
 ): Promise<Listing[]> {
+  const log = createLogger(config.source)
   const allListings: Listing[] = []
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     const url = config.buildUrl(params, page)
-    console.log(`[${config.source}] Fetching page ${page}: ${url}`)
+    log.info(`Fetching page ${page}`, { url })
 
     let html: string
     try {
@@ -66,15 +71,19 @@ export async function paginatedSearch(
       const response = await axios.get(url, {
         headers: DEFAULT_HEADERS,
         timeout: REQUEST_TIMEOUT,
+        maxContentLength: 10 * 1024 * 1024,
+        maxBodyLength: 10 * 1024 * 1024,
       })
-      console.log(
-        `[${config.source}] Page ${page}: HTTP ${response.status} (${Date.now() - start}ms)`
-      )
+      log.info(`Page ${page}`, {
+        status: response.status,
+        durationMs: Date.now() - start,
+      })
 
       if (response.status !== 200) {
-        console.warn(
-          `[${config.source}] Unexpected status ${response.status}, stopping pagination`
-        )
+        log.warn('Unexpected status, stopping pagination', {
+          status: response.status,
+          page,
+        })
         break
       }
 
@@ -83,27 +92,20 @@ export async function paginatedSearch(
       if (axios.isAxiosError(error) && error.response) {
         const status = error.response.status
         if (status === 429) {
-          console.warn(
-            `[${config.source}] Rate limited (429), stopping pagination`
-          )
+          log.warn('Rate limited (429), stopping pagination')
         } else {
-          console.warn(
-            `[${config.source}] HTTP ${status} on page ${page}, stopping pagination`
-          )
+          log.warn(`HTTP ${status} on page ${page}, stopping pagination`)
         }
       } else {
-        console.error(
-          `[${config.source}] Request failed on page ${page}:`,
-          error instanceof Error ? error.message : error
-        )
+        log.error(`Request failed on page ${page}`, {
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
       break
     }
 
     const listings = config.parsePage(html)
-    console.log(
-      `[${config.source}] Page ${page}: ${listings.length} listings parsed`
-    )
+    log.info(`Page ${page}: ${listings.length} listings parsed`)
     allListings.push(...listings)
 
     if (!config.hasNextPage(html, page)) break
