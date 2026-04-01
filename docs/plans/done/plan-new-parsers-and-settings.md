@@ -176,22 +176,9 @@ registry.register(new KupujemProdajemParser())
 
 Files: `src/index.ts`
 
-### Phase 3: Future parsers (not implemented now, just preparation)
+### Phase 3: Future parsers
 
-**4.1 — 4zida.rs (recommended next)**
-
-- 99K+ listings, cheerio-compatible, no login
-- URL structure needs research during implementation
-- Register as `source: '4zida'`
-- Add to site settings toggles
-
-**4.2 — oglasi.rs (after 4zida)**
-
-- Major classifieds portal, broader than just property
-- Cheerio-compatible, no login
-- Register as `source: 'oglasi'`
-
-No code for Phase 4 — just ensure the architecture supports easy addition (it already does via `ParserRegistry.register()`).
+Moved to dedicated plan: `docs/plans/plan-4zida-oglasi-parsers.md`
 
 ## Technical Decisions
 
