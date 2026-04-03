@@ -12,6 +12,10 @@ import { createLogger } from './logger'
 
 const log = createLogger('main')
 
+if (!config.botToken) {
+  throw new Error('Missing required env var: BOT_TOKEN')
+}
+
 const db = initDatabase(config.dbPath)
 log.info('Database initialized', { path: config.dbPath })
 
