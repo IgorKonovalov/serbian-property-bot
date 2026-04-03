@@ -48,7 +48,10 @@ const STATE_TTL_MS = config.sessionTtlMs
 const SEARCH_COOLDOWN_MS = config.searchCooldownMs
 
 const userStates = new TTLMap<number, SearchState>(STATE_TTL_MS)
-const lastSearchTime = new TTLMap<number, number>(24 * 60 * 60 * 1000, 60 * 60 * 1000)
+const lastSearchTime = new TTLMap<number, number>(
+  24 * 60 * 60 * 1000,
+  60 * 60 * 1000
+)
 
 export function hasActiveSearchState(telegramId: number): boolean {
   return userStates.has(telegramId)
@@ -179,10 +182,9 @@ function buildResultsMessage(results: SearchResult[], page: number): string {
 }
 
 async function runSearch(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ctx: {
     from: { id: number; username?: string }
-    reply: (...args: any[]) => Promise<any>
+    reply: (text: string, extra?: Record<string, unknown>) => Promise<unknown>
   },
   telegramId: number,
   state: SearchState,
