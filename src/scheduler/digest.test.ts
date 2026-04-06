@@ -4,6 +4,10 @@ import {
   buildDigestData,
   buildNewListingsMessage,
   buildPriceChangesMessage,
+  buildNewListingsPage,
+  buildPriceChangesPage,
+  filterByBucket,
+  digestCache,
   sendDigestToAll,
   refreshFavoritePrices,
   type DigestData,
@@ -78,10 +82,10 @@ describe('buildDigestSummary', () => {
     }
     const result = buildDigestSummary(data)
     expect(result).not.toBeNull()
-    expect(result!.text).toContain('Изменений цен: 1')
+    expect(result!.text).toContain('Изменения в избранном: 1')
     expect(result!.keyboard.inline_keyboard).toHaveLength(1)
     expect(result!.keyboard.inline_keyboard[0][0].callback_data).toBe(
-      'digest_prices'
+      'digest_fav'
     )
   })
 
@@ -107,14 +111,14 @@ describe('buildNewListingsMessage', () => {
     expect(msg).toContain('halooglasi')
   })
 
-  it('limits output to 10 listings', () => {
+  it('limits output to one page of listings', () => {
     const listings = Array.from({ length: 15 }, (_, i) =>
       makeListing({ externalId: `ext-${i}`, title: `Listing ${i}` })
     )
     const msg = buildNewListingsMessage(listings)
-    // Should have entries numbered 1-10
-    expect(msg).toContain('10.')
-    expect(msg).not.toContain('11.')
+    // Default page size is 5
+    expect(msg).toContain('5.')
+    expect(msg).not.toContain('6.')
   })
 
   it('handles listing with null fields', () => {
@@ -222,7 +226,7 @@ describe('buildDigestData', () => {
 })
 
 describe('sendDigestToAll', () => {
-  it('sends digest to users with data', async () => {
+  it('sends digest to users with data and populates cache', async () => {
     const user = findOrCreateUser(300, 'sender')
     createProfile(user.id, 'Test', 'kuća')
     const bot = makeBotMock()
@@ -232,6 +236,10 @@ describe('sendDigestToAll', () => {
       expect.any(String),
       expect.objectContaining({ parse_mode: 'HTML' })
     )
+    // Cache should be populated so callbacks work
+    const cached = digestCache.get(300)
+    expect(cached).toBeDefined()
+    expect(cached!.data.newListings).toHaveLength(1)
   })
 
   it('does not send when user has no digest data', async () => {
@@ -289,5 +297,160 @@ describe('refreshFavoritePrices', () => {
     const bot = makeBotMock()
     // Should not throw
     await refreshFavoritePrices(bot, registry)
+  })
+})
+
+describe('buildNewListingsPage', () => {
+  const listings = Array.from({ length: 12 }, (_, i) =>
+    makeListing({
+      externalId: `ext-${i}`,
+      title: `Listing ${i}`,
+      price: (i + 1) * 10000,
+    })
+  )
+
+  it('shows first page of listings', () => {
+    const { text } = buildNewListingsPage(listings, 0, 'all')
+    expect(text).toContain('1.')
+    expect(text).toContain('5.')
+    expect(text).not.toContain('6.')
+    expect(text).toContain('Стр. 1/3')
+    expect(text).toContain('всего: 12')
+  })
+
+  it('shows second page', () => {
+    const { text } = buildNewListingsPage(listings, 1, 'all')
+    expect(text).toContain('6.')
+    expect(text).toContain('10.')
+    expect(text).toContain('Стр. 2/3')
+  })
+
+  it('shows last page with remaining items', () => {
+    const { text } = buildNewListingsPage(listings, 2, 'all')
+    expect(text).toContain('11.')
+    expect(text).toContain('12.')
+    expect(text).toContain('Стр. 3/3')
+  })
+
+  it('clamps page to valid range', () => {
+    const { text } = buildNewListingsPage(listings, 99, 'all')
+    expect(text).toContain('Стр. 3/3')
+  })
+
+  it('includes navigation buttons', () => {
+    const { keyboard } = buildNewListingsPage(listings, 1, 'all')
+    const allButtons = keyboard.inline_keyboard.flat()
+    const navButtons = allButtons.filter(
+      (b) => 'callback_data' in b && b.callback_data.startsWith('dpage_new_')
+    )
+    expect(navButtons).toHaveLength(2) // prev + next
+  })
+
+  it('no prev button on first page', () => {
+    const { keyboard } = buildNewListingsPage(listings, 0, 'all')
+    const allButtons = keyboard.inline_keyboard.flat()
+    const prevButtons = allButtons.filter(
+      (b) => 'callback_data' in b && b.callback_data === 'dpage_new_-1'
+    )
+    expect(prevButtons).toHaveLength(0)
+  })
+
+  it('includes filter buttons', () => {
+    const { keyboard } = buildNewListingsPage(listings, 0, 'all')
+    const allButtons = keyboard.inline_keyboard.flat()
+    const filterButtons = allButtons.filter(
+      (b) => 'callback_data' in b && b.callback_data.startsWith('dflt_')
+    )
+    expect(filterButtons).toHaveLength(5)
+  })
+
+  it('marks active filter bucket', () => {
+    const { keyboard } = buildNewListingsPage(listings, 0, 'lt50')
+    const filterRow = keyboard.inline_keyboard[0]
+    const active = filterRow.find((b) => 'text' in b && b.text.startsWith('['))
+    expect(active).toBeDefined()
+    expect(active!.text).toContain('€50k')
+  })
+
+  it('includes back button', () => {
+    const { keyboard } = buildNewListingsPage(listings, 0, 'all')
+    const allButtons = keyboard.inline_keyboard.flat()
+    const back = allButtons.find(
+      (b) => 'callback_data' in b && b.callback_data === 'digest_back'
+    )
+    expect(back).toBeDefined()
+  })
+})
+
+describe('buildPriceChangesPage', () => {
+  const changes = Array.from({ length: 8 }, (_, i) =>
+    makePriceChange({ listing_id: i + 1, title: `Change ${i}` })
+  )
+
+  it('shows first page', () => {
+    const { text } = buildPriceChangesPage(changes, 0)
+    expect(text).toContain('Изменения цен в избранном')
+    expect(text).toContain('Стр. 1/2')
+  })
+
+  it('shows second page', () => {
+    const { text } = buildPriceChangesPage(changes, 1)
+    expect(text).toContain('Стр. 2/2')
+  })
+
+  it('includes prev/next buttons on middle pages', () => {
+    const manyChanges = Array.from({ length: 15 }, (_, i) =>
+      makePriceChange({ listing_id: i + 1 })
+    )
+    const { keyboard } = buildPriceChangesPage(manyChanges, 1)
+    const allButtons = keyboard.inline_keyboard.flat()
+    const navButtons = allButtons.filter(
+      (b) => 'callback_data' in b && b.callback_data.startsWith('dpage_price_')
+    )
+    expect(navButtons).toHaveLength(2)
+  })
+})
+
+describe('filterByBucket', () => {
+  const listings = [
+    makeListing({ price: 30000 }),
+    makeListing({ price: 75000 }),
+    makeListing({ price: 150000 }),
+    makeListing({ price: 250000 }),
+    makeListing({ price: null }),
+  ]
+
+  it('returns all for "all" bucket', () => {
+    expect(filterByBucket(listings, 'all')).toHaveLength(5)
+  })
+
+  it('filters < €50k', () => {
+    const result = filterByBucket(listings, 'lt50')
+    expect(result).toHaveLength(1)
+    expect(result[0].price).toBe(30000)
+  })
+
+  it('filters €50-100k', () => {
+    const result = filterByBucket(listings, '50_100')
+    expect(result).toHaveLength(1)
+    expect(result[0].price).toBe(75000)
+  })
+
+  it('filters €100-200k', () => {
+    const result = filterByBucket(listings, '100_200')
+    expect(result).toHaveLength(1)
+    expect(result[0].price).toBe(150000)
+  })
+
+  it('filters €200k+', () => {
+    const result = filterByBucket(listings, 'gt200')
+    expect(result).toHaveLength(1)
+    expect(result[0].price).toBe(250000)
+  })
+
+  it('excludes null-price listings from non-all buckets', () => {
+    expect(filterByBucket(listings, 'lt50')).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ price: null })])
+    )
   })
 })

@@ -23,7 +23,8 @@ export const messages = {
   searchSaved: '⭐ Сохранено в избранное!',
   searchAlreadySaved: 'Уже в избранном',
   searchListingNotFound: 'Объявление не найдено в базе.',
-  searchAreaTooLong: 'Название района слишком длинное (максимум 100 символов). Попробуйте короче.',
+  searchAreaTooLong:
+    'Название района слишком длинное (максимум 100 символов). Попробуйте короче.',
   searchCooldown: '⏳ Подождите 30 секунд перед следующим поиском.',
 
   // Profiles
@@ -36,8 +37,10 @@ export const messages = {
   profilesDelete: '🗑 Удалить',
   profilesDeleted: 'Профиль удалён.',
   profilesNotFound: 'Профиль не найден.',
-  profilesNameTooLong: 'Название слишком длинное (максимум 100 символов). Попробуйте короче.',
-  profilesKeywordsTooLong: 'Ключевые слова слишком длинные (максимум 200 символов). Попробуйте короче.',
+  profilesNameTooLong:
+    'Название слишком длинное (максимум 100 символов). Попробуйте короче.',
+  profilesKeywordsTooLong:
+    'Ключевые слова слишком длинные (максимум 200 символов). Попробуйте короче.',
   profilesEnterName: 'Введите название профиля:',
   profilesEnterKeywords(defaultName: string): string {
     return (
@@ -95,11 +98,14 @@ export const messages = {
   digestNewButton(count: number, date: string): string {
     return `🆕 Новые (с ${date}) — ${count}`
   },
-  digestPriceButton(count: number): string {
-    return `📊 Цены (${count} изм.)`
+  digestFavButton(count: number): string {
+    return `⭐ Избранное (${count} изм.)`
   },
   digestNewTitle: '🆕 <b>Новые объявления:</b>\n\n',
-  digestPriceTitle: '📊 <b>Изменения цен:</b>\n\n',
+  digestFavTitle: '⭐ <b>Изменения цен в избранном:</b>\n\n',
+  digestPage(page: number, total: number, count: number): string {
+    return `Стр. ${page}/${total} (всего: ${count})`
+  },
 
   // Help
   helpButton: '❓ Помощь',

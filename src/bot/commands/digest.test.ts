@@ -155,11 +155,11 @@ describe('registerDigestCommand', () => {
     )
   })
 
-  it('handles digest_prices callback with empty cache', async () => {
+  it('handles digest_fav callback with empty cache', async () => {
     const bot = makeBot(makeMockRegistry())
     findOrCreateUser(123, 'testuser')
 
-    await bot.handleUpdate(makeCallbackUpdate('digest_prices'))
+    await bot.handleUpdate(makeCallbackUpdate('digest_fav'))
 
     expect(bot.telegram.callApi).toHaveBeenCalledWith(
       'answerCallbackQuery',

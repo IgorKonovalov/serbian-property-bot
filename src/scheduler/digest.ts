@@ -13,9 +13,54 @@ import type { ParserRegistry } from '../parsers/registry'
 import type { Listing, SearchParams } from '../parsers/types'
 import { messages } from '../bot/messages'
 import { escapeUrl } from '../utils'
+import { TTLMap } from '../bot/state-manager'
+import { config } from '../config'
 import { createLogger } from '../logger'
 
 const log = createLogger('digest')
+
+const PER_PAGE = config.resultsPerPage
+
+// --- Price filter buckets ---
+
+export type PriceBucket = 'all' | 'lt50' | '50_100' | '100_200' | 'gt200'
+
+export const PRICE_BUCKETS: { key: PriceBucket; label: string }[] = [
+  { key: 'all', label: 'Все' },
+  { key: 'lt50', label: '< €50k' },
+  { key: '50_100', label: '€50-100k' },
+  { key: '100_200', label: '€100-200k' },
+  { key: 'gt200', label: '€200k+' },
+]
+
+function matchesBucket(price: number | null, bucket: PriceBucket): boolean {
+  if (bucket === 'all') return true
+  if (price === null) return false
+  switch (bucket) {
+    case 'lt50':
+      return price < 50000
+    case '50_100':
+      return price >= 50000 && price < 100000
+    case '100_200':
+      return price >= 100000 && price < 200000
+    case 'gt200':
+      return price >= 200000
+  }
+}
+
+export function filterByBucket(
+  listings: Listing[],
+  bucket: PriceBucket
+): Listing[] {
+  if (bucket === 'all') return listings
+  return listings.filter((l) => matchesBucket(l.price, bucket))
+}
+
+function bucketLabel(bucket: PriceBucket): string {
+  return PRICE_BUCKETS.find((b) => b.key === bucket)?.label ?? 'Все'
+}
+
+// --- Formatting ---
 
 function formatPriceChange(pc: PriceChange): string {
   const pctChange = ((pc.new_price - pc.old_price) / pc.old_price) * 100
@@ -45,10 +90,22 @@ function formatNewListing(l: Listing, i: number): string {
   )
 }
 
+// --- Digest data ---
+
 export interface DigestData {
   priceChanges: PriceChange[]
   newListings: Listing[]
 }
+
+export interface DigestState {
+  data: DigestData
+  newPage: number
+  pricePage: number
+  priceBucket: PriceBucket
+}
+
+/** Shared cache — written by both scheduler and /digest command, read by callbacks */
+export const digestCache = new TTLMap<number, DigestState>(12 * 60 * 60 * 1000)
 
 export async function buildDigestData(
   userId: number,
@@ -89,6 +146,8 @@ export async function buildDigestData(
   return { priceChanges, newListings }
 }
 
+// --- Summary ---
+
 export function buildDigestSummary(data: DigestData): {
   text: string
   keyboard: InlineKeyboardMarkup
@@ -113,11 +172,11 @@ export function buildDigestSummary(data: DigestData): {
   }
 
   if (priceChanges.length > 0) {
-    lines.push(`📊 Изменений цен: ${priceChanges.length}`)
+    lines.push(`⭐ Изменения в избранном: ${priceChanges.length}`)
     buttons.push([
       {
-        text: messages.digestPriceButton(priceChanges.length),
-        callback_data: 'digest_prices',
+        text: messages.digestFavButton(priceChanges.length),
+        callback_data: 'digest_fav',
       },
     ])
   }
@@ -128,14 +187,120 @@ export function buildDigestSummary(data: DigestData): {
   }
 }
 
+// --- Paginated message builders ---
+
+export function buildNewListingsPage(
+  listings: Listing[],
+  page: number,
+  bucket: PriceBucket
+): { text: string; keyboard: InlineKeyboardMarkup } {
+  const filtered = filterByBucket(listings, bucket)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  const safePage = Math.min(Math.max(0, page), totalPages - 1)
+  const start = safePage * PER_PAGE
+  const pageItems = filtered.slice(start, start + PER_PAGE)
+
+  const header =
+    bucket === 'all'
+      ? messages.digestNewTitle
+      : `🆕 <b>Новые (${bucketLabel(bucket)}):</b>\n\n`
+
+  const body =
+    pageItems.length > 0
+      ? pageItems.map((l, i) => formatNewListing(l, start + i)).join('\n\n')
+      : 'Нет объявлений в этом диапазоне.'
+
+  const footer = `\n\n${messages.digestPage(safePage + 1, totalPages, filtered.length)}`
+
+  const rows: InlineKeyboardButton.CallbackButton[][] = []
+
+  // Filter row
+  rows.push(
+    PRICE_BUCKETS.map((b) => ({
+      text: b.key === bucket ? `[${b.label}]` : b.label,
+      callback_data: `dflt_${b.key}`,
+    }))
+  )
+
+  // Navigation row
+  const nav: InlineKeyboardButton.CallbackButton[] = []
+  if (safePage > 0) {
+    nav.push({
+      text: messages.buttonPrev,
+      callback_data: `dpage_new_${safePage - 1}`,
+    })
+  }
+  if (safePage < totalPages - 1) {
+    nav.push({
+      text: messages.buttonNext,
+      callback_data: `dpage_new_${safePage + 1}`,
+    })
+  }
+  if (nav.length > 0) rows.push(nav)
+
+  // Back button
+  rows.push([
+    { text: messages.buttonBackToDigest, callback_data: 'digest_back' },
+  ])
+
+  return {
+    text: header + body + footer,
+    keyboard: { inline_keyboard: rows },
+  }
+}
+
+export function buildPriceChangesPage(
+  changes: PriceChange[],
+  page: number
+): { text: string; keyboard: InlineKeyboardMarkup } {
+  const totalPages = Math.max(1, Math.ceil(changes.length / PER_PAGE))
+  const safePage = Math.min(Math.max(0, page), totalPages - 1)
+  const start = safePage * PER_PAGE
+  const pageItems = changes.slice(start, start + PER_PAGE)
+
+  const body = pageItems.map(formatPriceChange).join('\n\n')
+  const footer = `\n\n${messages.digestPage(safePage + 1, totalPages, changes.length)}`
+
+  const rows: InlineKeyboardButton.CallbackButton[][] = []
+
+  // Navigation row
+  const nav: InlineKeyboardButton.CallbackButton[] = []
+  if (safePage > 0) {
+    nav.push({
+      text: messages.buttonPrev,
+      callback_data: `dpage_price_${safePage - 1}`,
+    })
+  }
+  if (safePage < totalPages - 1) {
+    nav.push({
+      text: messages.buttonNext,
+      callback_data: `dpage_price_${safePage + 1}`,
+    })
+  }
+  if (nav.length > 0) rows.push(nav)
+
+  // Back button
+  rows.push([
+    { text: messages.buttonBackToDigest, callback_data: 'digest_back' },
+  ])
+
+  return {
+    text: messages.digestFavTitle + body + footer,
+    keyboard: { inline_keyboard: rows },
+  }
+}
+
+// --- Legacy compat for tests (simple string builders) ---
+
 export function buildNewListingsMessage(listings: Listing[]): string {
-  const top10 = listings.slice(0, 10)
-  return messages.digestNewTitle + top10.map(formatNewListing).join('\n\n')
+  return buildNewListingsPage(listings, 0, 'all').text
 }
 
 export function buildPriceChangesMessage(changes: PriceChange[]): string {
-  return messages.digestPriceTitle + changes.map(formatPriceChange).join('\n\n')
+  return buildPriceChangesPage(changes, 0).text
 }
+
+// --- Scheduler entry points ---
 
 export async function sendDigestToAll(
   bot: Telegraf,
@@ -149,6 +314,14 @@ export async function sendDigestToAll(
       const summary = buildDigestSummary(data)
 
       if (summary) {
+        // Cache data so callback buttons work
+        digestCache.set(user.telegram_id, {
+          data,
+          newPage: 0,
+          pricePage: 0,
+          priceBucket: 'all',
+        })
+
         await bot.telegram.sendMessage(user.telegram_id, summary.text, {
           parse_mode: 'HTML',
           reply_markup: summary.keyboard,

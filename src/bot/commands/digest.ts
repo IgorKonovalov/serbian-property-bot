@@ -4,17 +4,15 @@ import type { ParserRegistry } from '../../parsers/registry'
 import {
   buildDigestData,
   buildDigestSummary,
-  buildNewListingsMessage,
-  buildPriceChangesMessage,
-  type DigestData,
+  buildNewListingsPage,
+  buildPriceChangesPage,
+  digestCache,
+  type PriceBucket,
 } from '../../scheduler/digest'
 import { messages } from '../messages'
-import { TTLMap } from '../state-manager'
 import { createLogger } from '../../logger'
 
 const log = createLogger('digest-cmd')
-
-const userDigestCache = new TTLMap<number, DigestData>(60 * 60 * 1000)
 
 export function registerDigestCommand(
   bot: Telegraf,
@@ -30,7 +28,12 @@ export function registerDigestCommand(
       const summary = buildDigestSummary(data)
 
       if (summary) {
-        userDigestCache.set(ctx.from.id, data)
+        digestCache.set(ctx.from.id, {
+          data,
+          newPage: 0,
+          pricePage: 0,
+          priceBucket: 'all',
+        })
         await ctx.reply(summary.text, {
           parse_mode: 'HTML',
           reply_markup: summary.keyboard,
@@ -59,49 +62,121 @@ export function registerDigestCommand(
     }
   })
 
+  // Show new listings (first page)
   bot.action('digest_new', async (ctx) => {
-    const data = userDigestCache.get(ctx.from.id)
-    if (!data || data.newListings.length === 0) {
+    const state = digestCache.get(ctx.from.id)
+    if (!state || state.data.newListings.length === 0) {
       await ctx.answerCbQuery(messages.digestEmpty)
       return
     }
 
-    const text = buildNewListingsMessage(data.newListings)
-    await ctx.reply(text, {
+    state.newPage = 0
+    state.priceBucket = 'all'
+    const { text, keyboard } = buildNewListingsPage(
+      state.data.newListings,
+      0,
+      'all'
+    )
+    await ctx.editMessageText(text, {
       parse_mode: 'HTML',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback(messages.buttonBackToDigest, 'digest_back')],
-      ]),
+      reply_markup: keyboard,
     })
     await ctx.answerCbQuery()
   })
 
-  bot.action('digest_prices', async (ctx) => {
-    const data = userDigestCache.get(ctx.from.id)
-    if (!data || data.priceChanges.length === 0) {
+  // New listings pagination
+  bot.action(/^dpage_new_(\d+)$/, async (ctx) => {
+    const state = digestCache.get(ctx.from.id)
+    if (!state) {
       await ctx.answerCbQuery(messages.digestEmpty)
       return
     }
 
-    const text = buildPriceChangesMessage(data.priceChanges)
-    await ctx.reply(text, {
+    const page = parseInt(ctx.match[1], 10)
+    state.newPage = page
+    const { text, keyboard } = buildNewListingsPage(
+      state.data.newListings,
+      page,
+      state.priceBucket
+    )
+    await ctx.editMessageText(text, {
       parse_mode: 'HTML',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback(messages.buttonBackToDigest, 'digest_back')],
-      ]),
+      reply_markup: keyboard,
     })
     await ctx.answerCbQuery()
   })
 
+  // Price filter
+  bot.action(/^dflt_(.+)$/, async (ctx) => {
+    const state = digestCache.get(ctx.from.id)
+    if (!state) {
+      await ctx.answerCbQuery(messages.digestEmpty)
+      return
+    }
+
+    const bucket = ctx.match[1] as PriceBucket
+    state.priceBucket = bucket
+    state.newPage = 0
+    const { text, keyboard } = buildNewListingsPage(
+      state.data.newListings,
+      0,
+      bucket
+    )
+    await ctx.editMessageText(text, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    })
+    await ctx.answerCbQuery()
+  })
+
+  // Show favorite price changes (first page)
+  bot.action('digest_fav', async (ctx) => {
+    const state = digestCache.get(ctx.from.id)
+    if (!state || state.data.priceChanges.length === 0) {
+      await ctx.answerCbQuery(messages.digestEmpty)
+      return
+    }
+
+    state.pricePage = 0
+    const { text, keyboard } = buildPriceChangesPage(state.data.priceChanges, 0)
+    await ctx.editMessageText(text, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    })
+    await ctx.answerCbQuery()
+  })
+
+  // Price changes pagination
+  bot.action(/^dpage_price_(\d+)$/, async (ctx) => {
+    const state = digestCache.get(ctx.from.id)
+    if (!state) {
+      await ctx.answerCbQuery(messages.digestEmpty)
+      return
+    }
+
+    const page = parseInt(ctx.match[1], 10)
+    state.pricePage = page
+    const { text, keyboard } = buildPriceChangesPage(
+      state.data.priceChanges,
+      page
+    )
+    await ctx.editMessageText(text, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    })
+    await ctx.answerCbQuery()
+  })
+
+  // Back to digest summary
   bot.action('digest_back', async (ctx) => {
-    const data = userDigestCache.get(ctx.from.id)
-    if (!data) {
+    const state = digestCache.get(ctx.from.id)
+    if (!state) {
       await ctx.answerCbQuery()
       return
     }
-    const summary = buildDigestSummary(data)
+    const summary = buildDigestSummary(state.data)
     if (summary) {
-      await ctx.reply(summary.text, {
+      await ctx.editMessageText(summary.text, {
         parse_mode: 'HTML',
         reply_markup: summary.keyboard,
       })
@@ -109,6 +184,7 @@ export function registerDigestCommand(
     await ctx.answerCbQuery()
   })
 
+  // Retry digest
   bot.action('digest_retry', async (ctx) => {
     const user = findOrCreateUser(ctx.from.id, ctx.from.username)
     await ctx.answerCbQuery()
@@ -119,7 +195,12 @@ export function registerDigestCommand(
       const summary = buildDigestSummary(data)
 
       if (summary) {
-        userDigestCache.set(ctx.from.id, data)
+        digestCache.set(ctx.from.id, {
+          data,
+          newPage: 0,
+          pricePage: 0,
+          priceBucket: 'all',
+        })
         await ctx.reply(summary.text, {
           parse_mode: 'HTML',
           reply_markup: summary.keyboard,

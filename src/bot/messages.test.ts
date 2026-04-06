@@ -324,8 +324,14 @@ describe('function message properties', () => {
     expect(btn).toContain('30.03')
   })
 
-  it('digestPriceButton includes count', () => {
-    const btn = messages.digestPriceButton(3)
+  it('digestFavButton includes count', () => {
+    const btn = messages.digestFavButton(3)
     expect(btn).toContain('3')
+  })
+
+  it('digestPage shows page info', () => {
+    const page = messages.digestPage(1, 5, 25)
+    expect(page).toContain('1/5')
+    expect(page).toContain('25')
   })
 })
