@@ -2,6 +2,9 @@ import * as cheerio from 'cheerio'
 import type { Listing, Parser, SearchParams } from './types'
 import { paginatedSearch, fetchPage } from './base-parser'
 import { cityToSlug } from './utils'
+import { createLogger } from '../logger'
+
+const logger = createLogger('4zida')
 
 const BASE_URL = 'https://www.4zida.rs/prodaja-kuca'
 const ITEMS_PER_PAGE = 20
@@ -108,7 +111,9 @@ export function parseJsonLd(html: string): Listing[] {
     } catch (error) {
       // malformed JSON-LD, skip — log for monitoring
       if (process.env.NODE_ENV !== 'test') {
-        console.warn(`[4zida] Malformed JSON-LD: ${error instanceof Error ? error.message : String(error)}`)
+        logger.warn('Malformed JSON-LD', {
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     }
   })
@@ -216,7 +221,9 @@ export function parseDetailPage(html: string, url: string): Listing | null {
     } catch (error) {
       // malformed JSON-LD in detail page, skip
       if (process.env.NODE_ENV !== 'test') {
-        console.warn(`[4zida] Malformed detail JSON-LD: ${error instanceof Error ? error.message : String(error)}`)
+        logger.warn('Malformed detail JSON-LD', {
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     }
   })

@@ -1,7 +1,7 @@
 # Plan: Code Quality and Security Hardening
 
 **Date:** 2026-04-01
-**Status:** In Progress
+**Status:** Complete (Q4 and Q8 deferred as future work)
 
 ## Goal
 
@@ -22,30 +22,30 @@ Plus code quality concerns: duplicated parser utilities, scattered state managem
 
 ### Security
 
-| # | Finding | Severity | Location |
-|---|---------|----------|----------|
-| S1 | `escapeHtml()` doesn't escape quotes (`"`, `'`) | High | `src/utils.ts:1-3` |
-| S2 | `escapeUrl()` doesn't validate URL scheme (allows `javascript:`) | Medium | `src/utils.ts:5-7` |
-| S3 | No `maxContentLength` on axios requests — 1GB response could OOM | Medium | `src/parsers/base-parser.ts:66-69` |
-| S4 | `lastSearchTime` Map never cleaned — grows with every unique user | Critical | `src/bot/commands/search.ts:46` |
-| S5 | `userDigestCache` Map never cleaned — stores large Listing arrays | Critical | `src/bot/commands/digest.ts:13` |
-| S6 | `userPages` Map in favorites never cleaned | Low | `src/bot/commands/favorites.ts:14` |
-| S7 | Price/size inputs have no upper-bound validation | High | `src/bot/commands/search.ts:365-382`, `profiles.ts:57-85` |
-| S8 | No bot-wide rate limiting beyond 30s search cooldown | Medium | `src/bot/commands/search.ts:43` |
-| S9 | `save_` callback doesn't verify listing belongs to user's results | Medium | `src/bot/commands/search.ts:523` |
+| #   | Finding                                                           | Severity | Location                                                  |
+| --- | ----------------------------------------------------------------- | -------- | --------------------------------------------------------- |
+| S1  | `escapeHtml()` doesn't escape quotes (`"`, `'`)                   | High     | `src/utils.ts:1-3`                                        |
+| S2  | `escapeUrl()` doesn't validate URL scheme (allows `javascript:`)  | Medium   | `src/utils.ts:5-7`                                        |
+| S3  | No `maxContentLength` on axios requests — 1GB response could OOM  | Medium   | `src/parsers/base-parser.ts:66-69`                        |
+| S4  | `lastSearchTime` Map never cleaned — grows with every unique user | Critical | `src/bot/commands/search.ts:46`                           |
+| S5  | `userDigestCache` Map never cleaned — stores large Listing arrays | Critical | `src/bot/commands/digest.ts:13`                           |
+| S6  | `userPages` Map in favorites never cleaned                        | Low      | `src/bot/commands/favorites.ts:14`                        |
+| S7  | Price/size inputs have no upper-bound validation                  | High     | `src/bot/commands/search.ts:365-382`, `profiles.ts:57-85` |
+| S8  | No bot-wide rate limiting beyond 30s search cooldown              | Medium   | `src/bot/commands/search.ts:43`                           |
+| S9  | `save_` callback doesn't verify listing belongs to user's results | Medium   | `src/bot/commands/search.ts:523`                          |
 
 ### Code Quality
 
-| # | Finding | Severity | Location |
-|---|---------|----------|----------|
-| Q1 | `parsePrice()`, `parseSize()`, `parseRooms()` duplicated across 5 parsers | Medium | `src/parsers/*.ts` |
-| Q2 | State eviction boilerplate duplicated in search.ts and profiles.ts | Medium | `src/bot/commands/search.ts:52-60`, `profiles.ts:34-42` |
-| Q3 | Empty catch blocks silently swallow errors (photo upload, JSON-LD) | Medium | `search.ts:511`, `4zida.ts:108`, `kp.ts:146` |
-| Q4 | Database operations have no try-catch — errors crash to global handler | Medium | `src/db/queries/*.ts` |
-| Q5 | Multi-table DB ops (listing upsert + price history) not wrapped in transaction | Medium | `src/db/queries/listings.ts:48` |
-| Q6 | Console logging is inconsistent — no structure, no levels, missing context | Medium | 35 calls across 8 files |
-| Q7 | 9+ hardcoded values that should be configurable | Low | Various |
-| Q8 | Missing tests: settings command, scheduler, config, user-settings queries | Medium | `src/bot/commands/settings.ts`, `src/scheduler/cron.ts` |
+| #   | Finding                                                                        | Severity | Location                                                |
+| --- | ------------------------------------------------------------------------------ | -------- | ------------------------------------------------------- |
+| Q1  | `parsePrice()`, `parseSize()`, `parseRooms()` duplicated across 5 parsers      | Medium   | `src/parsers/*.ts`                                      |
+| Q2  | State eviction boilerplate duplicated in search.ts and profiles.ts             | Medium   | `src/bot/commands/search.ts:52-60`, `profiles.ts:34-42` |
+| Q3  | Empty catch blocks silently swallow errors (photo upload, JSON-LD)             | Medium   | `search.ts:511`, `4zida.ts:108`, `kp.ts:146`            |
+| Q4  | Database operations have no try-catch — errors crash to global handler         | Medium   | `src/db/queries/*.ts`                                   |
+| Q5  | Multi-table DB ops (listing upsert + price history) not wrapped in transaction | Medium   | `src/db/queries/listings.ts:48`                         |
+| Q6  | Console logging is inconsistent — no structure, no levels, missing context     | Medium   | 35 calls across 8 files                                 |
+| Q7  | 9+ hardcoded values that should be configurable                                | Low      | Various                                                 |
+| Q8  | Missing tests: settings command, scheduler, config, user-settings queries      | Medium   | `src/bot/commands/settings.ts`, `src/scheduler/cron.ts` |
 
 ## Proposed Approach
 
@@ -80,7 +80,7 @@ Consistent error handling and structured logging across the codebase.
 - [x] **Q6** — Create `src/logger.ts` with simple structured logger (`info`, `warn`, `error` levels, JSON context, timestamps)
 - [x] Replace all `console.log/warn/error` calls with logger (35 call sites across 8 files)
 - [x] **Q3** — Add error logging to all empty catch blocks (search photo upload, 4zida/kp JSON-LD parsing)
-- [ ] **Q4** (deferred — DB queries already crash to global handler safely) — Add try-catch with logging to database query functions in `src/db/queries/*.ts`
+- [ ] **Q4** (deferred) — Add try-catch with logging to database query functions in `src/db/queries/*.ts`
 - [x] **Q5** — Wrap listing upsert + price history insert in a transaction in `src/db/queries/listings.ts`
 - [x] Sanitize global error handler in `src/bot/bot.ts` — add error ID, don't log full stack to console in production
 - [x] Update tests
@@ -105,13 +105,13 @@ Lower-priority improvements.
 
 ## Technical Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| TTL Map | Custom `TTLMap` class | No need for external dependency (Redis, lru-cache) for ~5 users. Simple `Map` + `setInterval` is sufficient |
-| Logger | Custom minimal logger | Project is small, structured logging library (pino, winston) is overkill. Simple function with JSON context covers needs |
-| Rate limiter | Custom middleware | Telegraf has no built-in rate limiter. Simple Map-based counter with sliding window is enough at this scale |
-| Parser helpers | Shared module, not base class methods | Parsers already extend no base class for parsing. Free functions are simpler and more testable |
-| DB retention | Startup cleanup, not cron | Bot restarts infrequently. Running on startup is simple and sufficient |
+| Decision       | Choice                                | Rationale                                                                                                                |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| TTL Map        | Custom `TTLMap` class                 | No need for external dependency (Redis, lru-cache) for ~5 users. Simple `Map` + `setInterval` is sufficient              |
+| Logger         | Custom minimal logger                 | Project is small, structured logging library (pino, winston) is overkill. Simple function with JSON context covers needs |
+| Rate limiter   | Custom middleware                     | Telegraf has no built-in rate limiter. Simple Map-based counter with sliding window is enough at this scale              |
+| Parser helpers | Shared module, not base class methods | Parsers already extend no base class for parsing. Free functions are simpler and more testable                           |
+| DB retention   | Startup cleanup, not cron             | Bot restarts infrequently. Running on startup is simple and sufficient                                                   |
 
 ## File Structure
 

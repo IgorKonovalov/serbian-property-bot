@@ -6,6 +6,9 @@ import {
   parseSize as sharedParseSize,
   parseRooms as sharedParseRooms,
 } from './parse-helpers'
+import { createLogger } from '../logger'
+
+const logger = createLogger('kp')
 
 const BASE_URL =
   'https://www.kupujemprodajem.com/nekretnine-prodaja/kuce/pretraga'
@@ -133,7 +136,9 @@ export function parseDetailPage(html: string, url: string): Listing | null {
     } catch (error) {
       // JSON-LD parsing failed, fall through to HTML parsing
       if (process.env.NODE_ENV !== 'test') {
-        console.warn(`[kp] JSON-LD parse failed: ${error instanceof Error ? error.message : String(error)}`)
+        logger.warn('JSON-LD parse failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     }
   }

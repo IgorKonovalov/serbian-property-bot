@@ -1,6 +1,9 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
+import { createLogger } from '../logger'
+
+const logger = createLogger('db')
 
 let db: Database.Database | null = null
 
@@ -111,9 +114,10 @@ export function initDatabase(dbPath: string): Database.Database {
     )
     .run(retentionDays)
   if (deleted.changes > 0) {
-    console.log(
-      `Cleaned up ${deleted.changes} price_history rows older than ${retentionDays} days`
-    )
+    logger.info('Price history cleanup', {
+      deletedRows: deleted.changes,
+      retentionDays,
+    })
   }
 
   return db
