@@ -95,6 +95,7 @@ function formatNewListing(l: Listing, i: number): string {
 export interface DigestData {
   priceChanges: PriceChange[]
   newListings: Listing[]
+  hasFavorites: boolean
 }
 
 export interface DigestState {
@@ -112,9 +113,10 @@ export async function buildDigestData(
   registry: ParserRegistry
 ): Promise<DigestData> {
   const priceChanges = getPriceChangesForUser(userId)
+  const hasFavorites = getUserFavorites(userId).length > 0
 
   const profiles = getUserProfiles(userId).filter((p) => p.is_active)
-  let newListings: Listing[] = []
+  const newListings: Listing[] = []
 
   if (profiles.length > 0) {
     const paramsList: SearchParams[] = profiles.map((p) => ({
@@ -132,10 +134,11 @@ export async function buildDigestData(
       const results = await registry.searchCombined(paramsList, enabledSources)
 
       for (const listing of results) {
-        upsertListing(listing)
+        const { isNew } = upsertListing(listing)
+        if (isNew) {
+          newListings.push(listing)
+        }
       }
-
-      newListings = results
     } catch (error) {
       log.error('Digest scrape failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -143,7 +146,7 @@ export async function buildDigestData(
     }
   }
 
-  return { priceChanges, newListings }
+  return { priceChanges, newListings, hasFavorites }
 }
 
 // --- Summary ---
@@ -151,35 +154,41 @@ export async function buildDigestData(
 export function buildDigestSummary(data: DigestData): {
   text: string
   keyboard: InlineKeyboardMarkup
-} | null {
-  const { priceChanges, newListings } = data
+} {
+  const { priceChanges, newListings, hasFavorites } = data
 
-  if (priceChanges.length === 0 && newListings.length === 0) return null
+  const today = new Date()
+  const dateStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}`
 
   const lines: string[] = [messages.digestSummaryTitle]
-  const buttons: InlineKeyboardButton.CallbackButton[][] = []
+  lines.push(`🆕 Новых: ${newListings.length}`)
 
-  if (newListings.length > 0) {
-    const today = new Date()
-    const dateStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}`
-    lines.push(`🆕 Новых: ${newListings.length}`)
-    buttons.push([
+  if (hasFavorites) {
+    lines.push(
+      priceChanges.length > 0
+        ? `⭐ Изменения в избранном: ${priceChanges.length}`
+        : '⭐ Изменения в избранном: 0'
+    )
+  } else {
+    lines.push('⭐ Нет сохранённых объявлений')
+  }
+
+  const buttons: InlineKeyboardButton.CallbackButton[][] = [
+    [
       {
         text: messages.digestNewButton(newListings.length, dateStr),
         callback_data: 'digest_new',
       },
-    ])
-  }
-
-  if (priceChanges.length > 0) {
-    lines.push(`⭐ Изменения в избранном: ${priceChanges.length}`)
-    buttons.push([
+    ],
+    [
       {
-        text: messages.digestFavButton(priceChanges.length),
-        callback_data: 'digest_fav',
+        text: hasFavorites
+          ? messages.digestFavButton(priceChanges.length)
+          : messages.digestNoFavorites,
+        callback_data: hasFavorites ? 'digest_fav' : 'digest_nofav',
       },
-    ])
-  }
+    ],
+  ]
 
   return {
     text: lines.join('\n'),
@@ -313,23 +322,19 @@ export async function sendDigestToAll(
       const data = await buildDigestData(user.id, registry)
       const summary = buildDigestSummary(data)
 
-      if (summary) {
-        // Cache data so callback buttons work
-        digestCache.set(user.telegram_id, {
-          data,
-          newPage: 0,
-          pricePage: 0,
-          priceBucket: 'all',
-        })
+      // Cache data so callback buttons work
+      digestCache.set(user.telegram_id, {
+        data,
+        newPage: 0,
+        pricePage: 0,
+        priceBucket: 'all',
+      })
 
-        await bot.telegram.sendMessage(user.telegram_id, summary.text, {
-          parse_mode: 'HTML',
-          reply_markup: summary.keyboard,
-        })
-        log.info('Digest sent', { telegramId: user.telegram_id })
-      } else {
-        log.info('No digest to send', { telegramId: user.telegram_id })
-      }
+      await bot.telegram.sendMessage(user.telegram_id, summary.text, {
+        parse_mode: 'HTML',
+        reply_markup: summary.keyboard,
+      })
+      log.info('Digest sent', { telegramId: user.telegram_id })
     } catch (error) {
       log.error('Failed to send digest', {
         telegramId: user.telegram_id,

@@ -18,7 +18,12 @@ interface DbListing {
   last_seen_at: string
 }
 
-export function upsertListing(listing: Listing): DbListing {
+export interface UpsertResult {
+  dbListing: DbListing
+  isNew: boolean
+}
+
+export function upsertListing(listing: Listing): UpsertResult {
   const db = getDatabase()
 
   const upsert = db.transaction(() => {
@@ -52,9 +57,10 @@ export function upsertListing(listing: Listing): DbListing {
         ).run(existing.id, listing.price)
       }
 
-      return db
+      const dbListing = db
         .prepare('SELECT * FROM listings WHERE id = ?')
         .get(existing.id) as DbListing
+      return { dbListing, isNew: false }
     }
 
     const result = db
@@ -85,9 +91,10 @@ export function upsertListing(listing: Listing): DbListing {
       ).run(id, listing.price)
     }
 
-    return db
+    const dbListing = db
       .prepare('SELECT * FROM listings WHERE id = ?')
       .get(id) as DbListing
+    return { dbListing, isNew: true }
   })
 
   return upsert()

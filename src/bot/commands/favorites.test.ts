@@ -101,7 +101,7 @@ describe('registerFavoritesCommand', () => {
   it('shows favorites list when favorites exist', async () => {
     const bot = makeBot()
     const user = findOrCreateUser(123, 'testuser')
-    const listing = upsertListing(makeListing())
+    const { dbListing: listing } = upsertListing(makeListing())
     addFavorite(user.id, listing.id)
 
     await bot.handleUpdate(makeCommandUpdate('/favorites'))
@@ -119,7 +119,7 @@ describe('registerFavoritesCommand', () => {
   it('removes a favorite via callback', async () => {
     const bot = makeBot()
     const user = findOrCreateUser(123, 'testuser')
-    const listing = upsertListing(makeListing())
+    const { dbListing: listing } = upsertListing(makeListing())
     addFavorite(user.id, listing.id)
 
     await bot.handleUpdate(makeCallbackUpdate(`fav_rm_${listing.id}`))
@@ -130,8 +130,8 @@ describe('registerFavoritesCommand', () => {
   it('clears all favorites via confirm callback', async () => {
     const bot = makeBot()
     const user = findOrCreateUser(123, 'testuser')
-    const l1 = upsertListing(makeListing({ externalId: 'a' }))
-    const l2 = upsertListing(makeListing({ externalId: 'b' }))
+    const { dbListing: l1 } = upsertListing(makeListing({ externalId: 'a' }))
+    const { dbListing: l2 } = upsertListing(makeListing({ externalId: 'b' }))
     addFavorite(user.id, l1.id)
     addFavorite(user.id, l2.id)
 
@@ -143,7 +143,7 @@ describe('registerFavoritesCommand', () => {
   it('shows confirmation on fav_clearall', async () => {
     const bot = makeBot()
     const user = findOrCreateUser(123, 'testuser')
-    const listing = upsertListing(makeListing())
+    const { dbListing: listing } = upsertListing(makeListing())
     addFavorite(user.id, listing.id)
 
     await bot.handleUpdate(makeCallbackUpdate('fav_clearall'))
@@ -160,7 +160,7 @@ describe('registerFavoritesCommand', () => {
   it('handles fav_cancelclear callback', async () => {
     const bot = makeBot()
     const user = findOrCreateUser(123, 'testuser')
-    const listing = upsertListing(makeListing())
+    const { dbListing: listing } = upsertListing(makeListing())
     addFavorite(user.id, listing.id)
 
     await bot.handleUpdate(makeCallbackUpdate('fav_cancelclear'))
@@ -177,7 +177,9 @@ describe('registerFavoritesCommand', () => {
     const user = findOrCreateUser(123, 'testuser')
     // Create 6 listings to trigger pagination (FAVORITES_PER_PAGE = 5)
     for (let i = 0; i < 6; i++) {
-      const listing = upsertListing(makeListing({ externalId: `ext-${i}` }))
+      const { dbListing: listing } = upsertListing(
+        makeListing({ externalId: `ext-${i}` })
+      )
       addFavorite(user.id, listing.id)
     }
 

@@ -96,11 +96,18 @@ export const messages = {
   // Digest buttons
   digestSummaryTitle: '🏠 <b>Дайджест</b>\n\n',
   digestNewButton(count: number, date: string): string {
-    return `🆕 Новые (с ${date}) — ${count}`
+    return count > 0
+      ? `🆕 Новые (с ${date}) — ${count}`
+      : `🆕 Новые (с ${date}) — 0`
   },
   digestFavButton(count: number): string {
-    return `⭐ Избранное (${count} изм.)`
+    return count > 0
+      ? `⭐ Избранное (${count} изм.)`
+      : `⭐ Избранное — нет изменений`
   },
+  digestNoFavorites: '⭐ Нет сохранённых объявлений',
+  digestNoNewListings: 'Нет новых объявлений.',
+  digestNoPriceChanges: 'Нет изменений цен в избранном.',
   digestNewTitle: '🆕 <b>Новые объявления:</b>\n\n',
   digestFavTitle: '⭐ <b>Изменения цен в избранном:</b>\n\n',
   digestPage(page: number, total: number, count: number): string {

@@ -32,7 +32,7 @@ let listingId: number
 beforeEach(() => {
   initDatabase(':memory:')
   userId = findOrCreateUser(1, 'testuser').id
-  listingId = upsertListing(makeListing()).id
+  listingId = upsertListing(makeListing()).dbListing.id
 })
 
 describe('addFavorite', () => {
@@ -71,7 +71,8 @@ describe('removeFavorite', () => {
 
 describe('clearAllFavorites', () => {
   it('removes all favorites for a user', () => {
-    const listing2 = upsertListing(makeListing({ externalId: 'ext-2' })).id
+    const listing2 = upsertListing(makeListing({ externalId: 'ext-2' }))
+      .dbListing.id
     addFavorite(userId, listingId)
     addFavorite(userId, listing2)
     clearAllFavorites(userId)
@@ -106,10 +107,10 @@ describe('getUserFavorites', () => {
   it('returns multiple favorites with listing data', () => {
     const listing2 = upsertListing(
       makeListing({ externalId: 'ext-2', title: 'Second' })
-    ).id
+    ).dbListing.id
     const listing3 = upsertListing(
       makeListing({ externalId: 'ext-3', title: 'Third' })
-    ).id
+    ).dbListing.id
     addFavorite(userId, listingId)
     addFavorite(userId, listing2)
     addFavorite(userId, listing3)

@@ -27,29 +27,16 @@ export function registerDigestCommand(
       const data = await buildDigestData(user.id, registry)
       const summary = buildDigestSummary(data)
 
-      if (summary) {
-        digestCache.set(ctx.from.id, {
-          data,
-          newPage: 0,
-          pricePage: 0,
-          priceBucket: 'all',
-        })
-        await ctx.reply(summary.text, {
-          parse_mode: 'HTML',
-          reply_markup: summary.keyboard,
-        })
-      } else {
-        await ctx.reply(messages.digestEmpty, {
-          ...Markup.inlineKeyboard([
-            [
-              Markup.button.callback(
-                messages.buttonNewSearch,
-                'search_restart'
-              ),
-            ],
-          ]),
-        })
-      }
+      digestCache.set(ctx.from.id, {
+        data,
+        newPage: 0,
+        pricePage: 0,
+        priceBucket: 'all',
+      })
+      await ctx.reply(summary.text, {
+        parse_mode: 'HTML',
+        reply_markup: summary.keyboard,
+      })
     } catch (error) {
       log.error('Digest command failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -65,8 +52,13 @@ export function registerDigestCommand(
   // Show new listings (first page)
   bot.action('digest_new', async (ctx) => {
     const state = digestCache.get(ctx.from.id)
-    if (!state || state.data.newListings.length === 0) {
+    if (!state) {
       await ctx.answerCbQuery(messages.digestEmpty)
+      return
+    }
+
+    if (state.data.newListings.length === 0) {
+      await ctx.answerCbQuery(messages.digestNoNewListings)
       return
     }
 
@@ -129,11 +121,21 @@ export function registerDigestCommand(
     await ctx.answerCbQuery()
   })
 
+  // No favorites hint
+  bot.action('digest_nofav', async (ctx) => {
+    await ctx.answerCbQuery(messages.digestNoFavorites)
+  })
+
   // Show favorite price changes (first page)
   bot.action('digest_fav', async (ctx) => {
     const state = digestCache.get(ctx.from.id)
-    if (!state || state.data.priceChanges.length === 0) {
+    if (!state) {
       await ctx.answerCbQuery(messages.digestEmpty)
+      return
+    }
+
+    if (state.data.priceChanges.length === 0) {
+      await ctx.answerCbQuery(messages.digestNoPriceChanges)
       return
     }
 
@@ -175,12 +177,10 @@ export function registerDigestCommand(
       return
     }
     const summary = buildDigestSummary(state.data)
-    if (summary) {
-      await ctx.editMessageText(summary.text, {
-        parse_mode: 'HTML',
-        reply_markup: summary.keyboard,
-      })
-    }
+    await ctx.editMessageText(summary.text, {
+      parse_mode: 'HTML',
+      reply_markup: summary.keyboard,
+    })
     await ctx.answerCbQuery()
   })
 
@@ -194,29 +194,16 @@ export function registerDigestCommand(
       const data = await buildDigestData(user.id, registry)
       const summary = buildDigestSummary(data)
 
-      if (summary) {
-        digestCache.set(ctx.from.id, {
-          data,
-          newPage: 0,
-          pricePage: 0,
-          priceBucket: 'all',
-        })
-        await ctx.reply(summary.text, {
-          parse_mode: 'HTML',
-          reply_markup: summary.keyboard,
-        })
-      } else {
-        await ctx.reply(messages.digestEmpty, {
-          ...Markup.inlineKeyboard([
-            [
-              Markup.button.callback(
-                messages.buttonNewSearch,
-                'search_restart'
-              ),
-            ],
-          ]),
-        })
-      }
+      digestCache.set(ctx.from.id, {
+        data,
+        newPage: 0,
+        pricePage: 0,
+        priceBucket: 'all',
+      })
+      await ctx.reply(summary.text, {
+        parse_mode: 'HTML',
+        reply_markup: summary.keyboard,
+      })
     } catch (error) {
       log.error('Digest retry failed', {
         error: error instanceof Error ? error.message : String(error),

@@ -32,29 +32,30 @@ beforeEach(() => {
 
 describe('upsertListing', () => {
   it('inserts a new listing and returns it with an id', () => {
-    const result = upsertListing(makeListing())
-    expect(result.id).toBeGreaterThan(0)
-    expect(result.external_id).toBe('ext-1')
-    expect(result.source).toBe('test')
-    expect(result.price).toBe(100000)
+    const { dbListing, isNew } = upsertListing(makeListing())
+    expect(isNew).toBe(true)
+    expect(dbListing.id).toBeGreaterThan(0)
+    expect(dbListing.external_id).toBe('ext-1')
+    expect(dbListing.source).toBe('test')
+    expect(dbListing.price).toBe(100000)
   })
 
   it('records initial price in price_history on insert', () => {
-    const result = upsertListing(makeListing())
+    const { dbListing } = upsertListing(makeListing())
     const db = getDatabase()
     const history = db
       .prepare('SELECT * FROM price_history WHERE listing_id = ?')
-      .all(result.id) as { price: number }[]
+      .all(dbListing.id) as { price: number }[]
     expect(history).toHaveLength(1)
     expect(history[0].price).toBe(100000)
   })
 
   it('does not record price history when price is null', () => {
-    const result = upsertListing(makeListing({ price: null }))
+    const { dbListing } = upsertListing(makeListing({ price: null }))
     const db = getDatabase()
     const history = db
       .prepare('SELECT * FROM price_history WHERE listing_id = ?')
-      .all(result.id)
+      .all(dbListing.id)
     expect(history).toHaveLength(0)
   })
 
@@ -69,8 +70,16 @@ describe('upsertListing', () => {
     expect(count.c).toBe(1)
   })
 
+  it('returns isNew=false for existing listing', () => {
+    upsertListing(makeListing())
+    const { isNew } = upsertListing(makeListing({ title: 'Updated' }))
+    expect(isNew).toBe(false)
+  })
+
   it('records price change on update with different price', () => {
-    const original = upsertListing(makeListing({ price: 100000 }))
+    const { dbListing: original } = upsertListing(
+      makeListing({ price: 100000 })
+    )
     upsertListing(makeListing({ price: 120000 }))
     const db = getDatabase()
     const history = db
@@ -82,7 +91,9 @@ describe('upsertListing', () => {
   })
 
   it('does not record price change when price stays the same', () => {
-    const original = upsertListing(makeListing({ price: 100000 }))
+    const { dbListing: original } = upsertListing(
+      makeListing({ price: 100000 })
+    )
     upsertListing(makeListing({ price: 100000 }))
     const db = getDatabase()
     const history = db
@@ -104,7 +115,7 @@ describe('upsertListing', () => {
 
 describe('getListingById', () => {
   it('returns listing by id', () => {
-    const inserted = upsertListing(makeListing())
+    const { dbListing: inserted } = upsertListing(makeListing())
     const found = getListingById(inserted.id)
     expect(found).toBeDefined()
     expect(found!.external_id).toBe('ext-1')
@@ -123,7 +134,7 @@ describe('getPriceChangesForUser', () => {
 
   it('detects price change on favorited listing', () => {
     const user = findOrCreateUser(1)
-    const listing = upsertListing(makeListing({ price: 100000 }))
+    const { dbListing: listing } = upsertListing(makeListing({ price: 100000 }))
     addFavorite(user.id, listing.id)
 
     // The initial insert already recorded price at datetime('now').
@@ -147,7 +158,7 @@ describe('getPriceChangesForUser', () => {
 
   it('ignores price changes on non-favorited listings', () => {
     const user = findOrCreateUser(1)
-    const listing = upsertListing(makeListing({ price: 100000 }))
+    const { dbListing: listing } = upsertListing(makeListing({ price: 100000 }))
     const db = getDatabase()
     db.prepare(
       "UPDATE price_history SET recorded_at = datetime('now', '-2 hours') WHERE listing_id = ?"

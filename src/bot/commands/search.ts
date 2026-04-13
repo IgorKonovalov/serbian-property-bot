@@ -236,7 +236,7 @@ async function runSearch(
     })
 
     const results: SearchResult[] = rawResults.map((listing) => {
-      const dbListing = upsertListing(listing)
+      const { dbListing } = upsertListing(listing)
       return { ...listing, dbId: dbListing.id }
     })
 

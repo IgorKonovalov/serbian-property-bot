@@ -56,47 +56,77 @@ beforeEach(() => {
 })
 
 describe('buildDigestSummary', () => {
-  it('returns null when no data', () => {
-    const data: DigestData = { priceChanges: [], newListings: [] }
-    expect(buildDigestSummary(data)).toBeNull()
+  it('always shows both buttons even when no data', () => {
+    const data: DigestData = {
+      priceChanges: [],
+      newListings: [],
+      hasFavorites: false,
+    }
+    const result = buildDigestSummary(data)
+    expect(result.keyboard.inline_keyboard).toHaveLength(2)
+    expect(result.text).toContain('Новых: 0')
+    expect(result.text).toContain('Нет сохранённых')
   })
 
   it('includes new listings count and button when present', () => {
     const data: DigestData = {
       priceChanges: [],
       newListings: [makeListing()],
+      hasFavorites: false,
     }
     const result = buildDigestSummary(data)
-    expect(result).not.toBeNull()
-    expect(result!.text).toContain('Новых: 1')
-    expect(result!.keyboard.inline_keyboard).toHaveLength(1)
-    expect(result!.keyboard.inline_keyboard[0][0].callback_data).toBe(
+    expect(result.text).toContain('Новых: 1')
+    expect(result.keyboard.inline_keyboard[0][0].callback_data).toBe(
       'digest_new'
     )
   })
 
-  it('includes price changes count and button when present', () => {
+  it('includes price changes count and button when favorites exist', () => {
     const data: DigestData = {
       priceChanges: [makePriceChange()],
       newListings: [],
+      hasFavorites: true,
     }
     const result = buildDigestSummary(data)
-    expect(result).not.toBeNull()
-    expect(result!.text).toContain('Изменения в избранном: 1')
-    expect(result!.keyboard.inline_keyboard).toHaveLength(1)
-    expect(result!.keyboard.inline_keyboard[0][0].callback_data).toBe(
+    expect(result.text).toContain('Изменения в избранном: 1')
+    expect(result.keyboard.inline_keyboard[1][0].callback_data).toBe(
       'digest_fav'
     )
   })
 
-  it('includes both buttons when both data types present', () => {
+  it('shows no-changes state for favorites with no price changes', () => {
+    const data: DigestData = {
+      priceChanges: [],
+      newListings: [],
+      hasFavorites: true,
+    }
+    const result = buildDigestSummary(data)
+    expect(result.text).toContain('Изменения в избранном: 0')
+    expect(result.keyboard.inline_keyboard[1][0].callback_data).toBe(
+      'digest_fav'
+    )
+  })
+
+  it('shows no-favorites button when user has no saved properties', () => {
+    const data: DigestData = {
+      priceChanges: [],
+      newListings: [makeListing()],
+      hasFavorites: false,
+    }
+    const result = buildDigestSummary(data)
+    expect(result.keyboard.inline_keyboard[1][0].callback_data).toBe(
+      'digest_nofav'
+    )
+  })
+
+  it('always shows both buttons when both data types present', () => {
     const data: DigestData = {
       priceChanges: [makePriceChange()],
       newListings: [makeListing()],
+      hasFavorites: true,
     }
     const result = buildDigestSummary(data)
-    expect(result).not.toBeNull()
-    expect(result!.keyboard.inline_keyboard).toHaveLength(2)
+    expect(result.keyboard.inline_keyboard).toHaveLength(2)
   })
 })
 
@@ -210,7 +240,7 @@ describe('buildDigestData', () => {
     const listing = makeListing({ externalId: 'upsert-test' })
     await buildDigestData(user.id, makeRegistry([listing]))
     // Verify it was inserted by upserting again (should not throw)
-    const dbListing = upsertListing(listing)
+    const { dbListing } = upsertListing(listing)
     expect(dbListing).toBeDefined()
   })
 
@@ -242,11 +272,15 @@ describe('sendDigestToAll', () => {
     expect(cached!.data.newListings).toHaveLength(1)
   })
 
-  it('does not send when user has no digest data', async () => {
+  it('always sends digest even when no new data', async () => {
     findOrCreateUser(301, 'empty')
     const bot = makeBotMock()
     await sendDigestToAll(bot, makeRegistry())
-    expect(bot.telegram.sendMessage).not.toHaveBeenCalled()
+    expect(bot.telegram.sendMessage).toHaveBeenCalledWith(
+      301,
+      expect.any(String),
+      expect.objectContaining({ parse_mode: 'HTML' })
+    )
   })
 
   it('continues sending to other users if one fails', async () => {
@@ -257,7 +291,7 @@ describe('sendDigestToAll', () => {
       .mockRejectedValueOnce(new Error('blocked'))
       .mockResolvedValueOnce({})
     await sendDigestToAll(bot, makeRegistry([makeListing()]))
-    // Should have attempted both (both have default profiles)
+    // Should have attempted both
     expect(bot.telegram.sendMessage).toHaveBeenCalledTimes(2)
   })
 })
@@ -265,7 +299,7 @@ describe('sendDigestToAll', () => {
 describe('refreshFavoritePrices', () => {
   it('fetches each favorite by URL', async () => {
     const user = findOrCreateUser(400, 'refresh')
-    const dbListing = upsertListing(makeListing({ externalId: 'fav-1' }))
+    const { dbListing } = upsertListing(makeListing({ externalId: 'fav-1' }))
     addFavorite(user.id, dbListing.id)
     const registry = makeRegistry([
       makeListing({ externalId: 'fav-1', price: 90000 }),
@@ -288,7 +322,7 @@ describe('refreshFavoritePrices', () => {
 
   it('handles fetchByUrl error gracefully', async () => {
     const user = findOrCreateUser(403, 'err')
-    const dbListing = upsertListing(makeListing({ externalId: 'fav-err' }))
+    const { dbListing } = upsertListing(makeListing({ externalId: 'fav-err' }))
     addFavorite(user.id, dbListing.id)
     const registry = {
       fetchByUrl: jest.fn().mockRejectedValue(new Error('fail')),
